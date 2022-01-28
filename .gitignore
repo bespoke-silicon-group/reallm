@@ -1,0 +1,9 @@
+basejump_stl/
+bsg_cadenv/
+DVEfiles/
+out/
+*.vpd
+*.swp
+*.pyc
+ucli.key
+vc_hdrs.h
