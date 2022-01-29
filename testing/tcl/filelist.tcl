@@ -21,8 +21,13 @@ set TESTING_SOURCE_FILES [join "
   $bsg_designs_target_dir/v/chiplet.v
   $bsg_designs_target_dir/v/link.v
   $bsg_designs_target_dir/v/counter.v
+  $bsg_designs_target_dir/v/inputs_gather.v
+  $bsg_designs_target_dir/v/outputs_scatter.v
+  $bsg_designs_target_dir/v/inputs_cycles_calculate.v
+  $bsg_designs_target_dir/v/outputs_workload_calculate.v
   
   $basejump_stl_dir/bsg_misc/bsg_dff.v
+  $basejump_stl_dir/bsg_misc/bsg_reduce.v
   $basejump_stl_dir/bsg_misc/bsg_dff_reset.v
   $basejump_stl_dir/bsg_dataflow/bsg_two_fifo.v
   $basejump_stl_dir/bsg_test/bsg_nonsynth_clock_gen.v

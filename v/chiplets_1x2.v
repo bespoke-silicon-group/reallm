@@ -33,7 +33,10 @@ module chiplets_1x2 #(
     ,.size_width_p(size_width_p)
     ,.data_bytes_p(data_bytes_p)
     ,.num_macs_p(num_macs_p)
-
+    ,.num_in_p(1)
+    ,.num_out_p(1)
+    ,.inputs_select_p(0)
+    ,.outputs_config_p(0)
     ,.macs_per_data_p(4)
   ) chiplet_1_1
       ( .clk_i(clk_i)
@@ -77,7 +80,10 @@ module chiplets_1x2 #(
     ,.size_width_p(size_width_p)
     ,.data_bytes_p(data_bytes_p)
     ,.num_macs_p(num_macs_p)
-
+    ,.num_in_p(1)
+    ,.num_out_p(1)
+    ,.inputs_select_p(0)
+    ,.outputs_config_p(0)
     ,.macs_per_data_p(2)
   ) chiplet_1_2
       ( .clk_i(clk_i)

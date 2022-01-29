@@ -7,9 +7,14 @@ module chiplet #(
   ,parameter `BSG_INV_PARAM(size_width_p)
   ,parameter data_bytes_p = 2 // bytes / data
 
+  ,parameter `BSG_INV_PARAM(num_in_p)
+  ,parameter `BSG_INV_PARAM(num_out_p)
+
   // chiplet hardware settings
   ,parameter `BSG_INV_PARAM(num_macs_p) // macs / cycle
   // chiplet configuration
+  ,parameter `BSG_INV_PARAM(inputs_select_p) // -1: gather, 0~num_in_p-1: select
+  ,parameter `BSG_INV_PARAM(outputs_config_p) // -1: gather, 0~num_in_p-1: select
   ,parameter `BSG_INV_PARAM(macs_per_data_p) // to perform # macs per input, also generate # output
 
   ,parameter width_p = id_width_p + size_width_p
@@ -19,37 +24,51 @@ module chiplet #(
     , input reset_i
 
     // input side
-    , output              ready_o 
-    , input [width_p-1:0] data_i 
-    , input               v_i     
+    , output [num_in_p-1:0]               ready_o 
+    , input  [num_in_p-1:0] [width_p-1:0] data_i
+    , input  [num_in_p-1:0]               v_i     
 
     // output side
-    , output              v_o   
-    , output[width_p-1:0] data_o
-    , input               ready_i 
+    , output [num_out_p-1:0]               v_o   
+    , output [num_out_p-1:0] [width_p-1:0] data_o
+    , input  [num_out_p-1:0]               ready_i 
     );
 
-  logic [width_p-1:0] data_to_ctr, data_from_ctr;
-  logic yumi_from_ctr, valid_to_ctr, valid_from_ctr, ready_to_ctr;
+  // Multiple input gather
+  logic inputs_v;
+  logic inputs_yumi;
+  logic [num_in_p-1:0][width_p-1:0] inputs_data;
 
-  bsg_two_fifo #(.width_p(width_p)) input_fifo
-  (  .clk_i   (clk_i)
-    ,.reset_i (reset_i)
-    // input side
+  inputs_gather #(.width_p(width_p), .num_in_p(num_in_p)) in
+  (  .clk_i
+    ,.reset_i
     ,.ready_o (ready_o)
     ,.data_i  (data_i)
-    ,.v_i     (v_i)    
-    // output side
-    ,.v_o     (valid_to_ctr)
+    ,.v_i     (v_i)
+    ,.v_o     (inputs_v)
+    ,.data_o  (inputs_data)
+    ,.yumi_i  (inputs_yumi)
+  );
+
+  logic [width_p-1:0] data_to_ctr;
+  logic [cycles_width_p-1:0] cycles;
+  inputs_cycles_calculate #(
+    .id_width_p(id_width_p)
+   ,.size_width_p(size_width_p)
+   ,.num_in_p(num_in_p)
+   ,.num_macs_p(num_macs_p)
+   ,.inputs_select_p(inputs_select_p)
+   ,.macs_per_data_p(macs_per_data_p)
+  ) in_cyc_cal
+  ( 
+     .data_i  (inputs_data)
     ,.data_o  (data_to_ctr) 
-    ,.yumi_i  (yumi_from_ctr)
-    );
+    ,.cycle_o (cycles)
+  );
 
-  wire [id_width_p-1:0] workload_id = data_to_ctr[width_p-1:size_width_p];
-  wire [size_width_p-1:0] workload_size = data_to_ctr[size_width_p-1:0];
-
-  wire [cycles_width_p-1:0] cycles = workload_size * macs_per_data_p / num_macs_p;
-
+  // Counter
+  logic [width_p-1:0] data_from_ctr;
+  logic valid_from_ctr, ready_to_ctr;
   counter #(
     .cycles_width_p(cycles_width_p)
    ,.width_p       (width_p)
@@ -57,32 +76,41 @@ module chiplet #(
   (  .clk_i    (clk_i)
     ,.reset_i  (reset_i)
     // input side
-    ,.yumi_o   (yumi_from_ctr)
+    ,.yumi_o   (inputs_yumi)
     ,.data_i   (data_to_ctr)
     ,.cycles_i (cycles)
-    ,.v_i      (valid_to_ctr)    
+    ,.v_i      (inputs_v)    
     // output side
     ,.v_o      (valid_from_ctr)
     ,.data_o   (data_from_ctr) 
     ,.ready_i  (ready_to_ctr)
   );
-  
-  logic [width_p-1:0] data;
-  wire yumi = ready_i & v_o;
-  bsg_two_fifo #(.width_p(width_p),.allow_enq_deq_on_full_p(1)) output_fifo
-  (  .clk_i   (clk_i)
-    ,.reset_i (reset_i)
-    // input side
-    ,.ready_o (ready_to_ctr)
-    ,.data_i  (data_from_ctr)
-    ,.v_i     (valid_from_ctr)    
-    // output side
-    ,.v_o     (v_o)
-    ,.data_o  (data) 
-    ,.yumi_i  (yumi)
-    );
 
-  assign data_o = {data[width_p-1 -: id_width_p], size_width_p'(macs_per_data_p)};
+  wire [width_p-1:0] output_data = {data_from_ctr[width_p-1 -: id_width_p], size_width_p'(macs_per_data_p)};
+  
+  logic [num_out_p-1:0][width_p-1:0] outputs_data;
+  outputs_workload_calculate #(
+    .id_width_p(id_width_p)
+   ,.size_width_p(size_width_p)
+   ,.num_out_p(num_out_p)
+   ,.outputs_config_p(outputs_config_p)
+  ) out_work_cal
+  (  .data_i (output_data)
+    ,.data_o (outputs_data)
+  );
+
+  // Multiple outputs scatter
+  wire [num_out_p-1:0] yumi = ready_i & v_o;
+  outputs_scatter #(.width_p(width_p), .num_out_p(num_out_p)) out
+  (  .clk_i
+    ,.reset_i
+    ,.ready_o (ready_to_ctr)
+    ,.data_i  (outputs_data)
+    ,.v_i     (valid_from_ctr)
+    ,.v_o     (v_o)
+    ,.data_o  (data_o)
+    ,.yumi_i  (yumi)
+  );
 
 
 endmodule
