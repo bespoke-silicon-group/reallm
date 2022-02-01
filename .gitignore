@@ -5,5 +5,6 @@ out/
 *.vpd
 *.swp
 *.pyc
+*.log
 ucli.key
 vc_hdrs.h

@@ -14,10 +14,10 @@ set TESTING_PACKAGE_FILES [join "
 set TESTING_SOURCE_FILES [join "
   $TESTING_PACKAGE_FILES
 
-  $bsg_designs_target_dir/testing/v/chiplets_1x2_tb.v
+  $bsg_designs_target_dir/testing/v/chiplets_array_tb.v
   $bsg_designs_target_dir/testing/v/data_gen.v
 
-  $bsg_designs_target_dir/v/chiplets_1x2.v
+  $bsg_designs_target_dir/v/chiplets_array.v
   $bsg_designs_target_dir/v/chiplet.v
   $bsg_designs_target_dir/v/link.v
   $bsg_designs_target_dir/v/counter.v

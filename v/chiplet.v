@@ -14,7 +14,7 @@ module chiplet #(
   ,parameter `BSG_INV_PARAM(num_macs_p) // macs / cycle
   // chiplet configuration
   ,parameter `BSG_INV_PARAM(inputs_select_p) // -1: gather, 0~num_in_p-1: select
-  ,parameter `BSG_INV_PARAM(outputs_config_p) // -1: gather, 0~num_in_p-1: select
+  ,parameter `BSG_INV_PARAM(outputs_config_p) // 0: replicate, 1: splite evenly
   ,parameter `BSG_INV_PARAM(macs_per_data_p) // to perform # macs per input, also generate # output
 
   ,parameter width_p = id_width_p + size_width_p

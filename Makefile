@@ -47,8 +47,8 @@ VCS_OPTIONS += +nospecify
 ## Chip and Testing Filelists and Liblists
 ########################################
 
-BSG_TOP_SIM_MODULE = chiplets_1x2_tb
-BSG_TOP_INSTANCE_PATH = chiplets_1x2_tb.inst
+BSG_TOP_SIM_MODULE = chiplets_array_tb
+BSG_TOP_INSTANCE_PATH = chiplets_array_tb.inst
 
 VCS_OPTIONS += +define+BSG_TOP_SIM_MODULE=$(BSG_TOP_SIM_MODULE)
 VCS_OPTIONS += +define+BSG_TOP_INSTANCE_PATH=$(BSG_TOP_INSTANCE_PATH)
@@ -106,6 +106,7 @@ clean:
 	rm -f  vcdplus.vpd
 	rm -f  inter.vpd
 	rm -f  ucli.key
+	rm -f  output.log
 
 test:
 	echo $(BSG_DESIGNS_TARGET_DIR)

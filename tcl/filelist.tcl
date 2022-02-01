@@ -13,7 +13,7 @@ set SVERILOG_PACKAGE_FILES [join "
 set SVERILOG_SOURCE_FILES [join "
   $SVERILOG_PACKAGE_FILES
 
-  $bsg_designs_target_dir/v/chiplets_1x2.v
+  $bsg_designs_target_dir/v/chiplets_array.v
   $bsg_designs_target_dir/v/chiplet.v
   $bsg_designs_target_dir/v/link.v
   $bsg_designs_target_dir/v/counter.v

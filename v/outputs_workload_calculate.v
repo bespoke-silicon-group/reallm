@@ -19,13 +19,15 @@ module outputs_workload_calculate #(
   );
 
 
+  logic [id_width_p-1:0] workload_id;
+  logic [size_width_p-1:0] workload_size;
+
   if (num_out_p == 1) begin: single_output
     assign data_o[0] = data_i;
   end
   else begin: multi_outputs
 
-    wire [id_width_p-1:0] workload_id = data_i[width_p-1:size_width_p];
-    wire [size_width_p-1:0] workload_size = data_i[size_width_p-1:0];
+    assign workload_id = data_i[width_p-1:size_width_p];
 
     if (outputs_config_p == 0) begin: replicate
       assign workload_size = data_i[size_width_p-1:0];
@@ -39,7 +41,7 @@ module outputs_workload_calculate #(
 
     genvar i;
     for (i = 0; i < num_out_p; i=i+1) begin: outputs_add
-      assign data_o[i] = {workload_id[width_p-1:size_width_p], workload_size};
+      assign data_o[i] = {workload_id, workload_size};
     end
 
   end
