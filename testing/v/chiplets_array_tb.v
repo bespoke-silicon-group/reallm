@@ -13,7 +13,7 @@ module chiplets_array_tb;
   parameter chiplets_routing_p = 0;
 
   parameter link_bandwidth_p = 4; // bytes / cycle
-  parameter num_macs_p = 4; // macs / cycle
+  parameter num_macs_p = 1; // macs / cycle
 
   parameter integer macs_per_data_p[num_chiplets_x_p-1:0] = {2, 4};
 
@@ -39,8 +39,8 @@ module chiplets_array_tb;
 
   bsg_nonsynth_reset_gen
     #(.num_clocks_p(1)
-      ,.reset_cycles_lo_p(6)
-      ,.reset_cycles_hi_p(4)
+      ,.reset_cycles_lo_p(2)
+      ,.reset_cycles_hi_p(2)
       ) reset_gen
       (.clk_i(clk_i)
        ,.async_reset_o(reset_i)
@@ -91,7 +91,7 @@ module chiplets_array_tb;
   integer f;
   initial begin
     $printtimescale;
-    f = $fopen("output.log","w");
+    f = $fopen($sformatf("sim_top.log"),"w");
     #10000
     $finish;
   end
@@ -99,14 +99,14 @@ module chiplets_array_tb;
   for (genvar i = 0; i < num_chiplets_y_p; i++) begin
     always_ff @(posedge clk_i) begin
       if (ready_o[i] & v_i[i]) begin
-        $fwrite(f, "Send workload %d to chiplet %2d at cycle %d\n", data_i[i][width_p-1 -: id_width_p], i, $time/10);
+        $fwrite(f, "Send \t %d to chiplet %2d at cycle %d\n", data_i[i][width_p-1 -: id_width_p], i, $time/10);
       end
     end
   end
 
   always_ff @(posedge clk_i) begin
     if (v_o[0]) begin
-      $fwrite(f, "Received workload %d at cycle %d\n", data_o[0][width_p-1 -: id_width_p], $time/10);
+      $fwrite(f, "Get \t %d               at cycle %d\n", data_o[0][width_p-1 -: id_width_p], $time/10);
     end
   end
 

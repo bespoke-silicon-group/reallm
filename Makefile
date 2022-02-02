@@ -106,7 +106,7 @@ clean:
 	rm -f  vcdplus.vpd
 	rm -f  inter.vpd
 	rm -f  ucli.key
-	rm -f  output.log
+	rm -f  *.log
 
 test:
 	echo $(BSG_DESIGNS_TARGET_DIR)

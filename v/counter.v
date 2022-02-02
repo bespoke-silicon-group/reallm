@@ -51,7 +51,7 @@ module counter #(
     else if (~finished) begin
       counter_num <= counter_num - 1'b1;
       if (counter_num==1'b1) begin
-        finished <= ready_i;
+        finished <= 1'b1;
         idle <= ready_i;
       end
       else begin
