@@ -8,6 +8,8 @@ module data_gen #(
   ,parameter `BSG_INV_PARAM(num_ports_p)
   ,parameter `BSG_INV_PARAM(els_p)
   ,parameter `BSG_INV_PARAM(workload_limit_p)
+  ,parameter `BSG_INV_PARAM(inital_size_p)
+  ,parameter `BSG_INV_PARAM(gen_freq_p) // 0: whenever ready; 
   ,parameter addr_width_lp=`BSG_SAFE_CLOG2(els_p)
   ,parameter width_p = id_width_p + size_width_p
 )
@@ -26,10 +28,11 @@ module data_gen #(
   logic [num_ports_p-1:0] [id_width_p-1:0] workload_id;
 
 
+  logic [num_ports_p-1:0] [31:0] counter;
   always_ff @(posedge clk_i) begin
     if (reset_i) begin
-        rom[0] <= 1;
-        rom[1] <= 1;
+        rom[0] <= inital_size_p / num_ports_p;
+        rom[1] <= inital_size_p / num_ports_p;
         flag <= 1;
     end
   end
@@ -40,14 +43,36 @@ module data_gen #(
         rd_addr[i] <= '0;
         v_o[i] <= '0;
         workload_id[i] <= '0;
+        counter[i] <= 0;
       end
-      else if (flag) begin
-        if (ready_i[i] & v_o[i]) begin
-          rd_addr[i] <= rd_addr[i]+1'b1;
-          workload_id[i] <= workload_id[i]+1'b1;
+      else if (flag & workload_id[i]<workload_limit_p) begin
+        if (gen_freq_p == 0) begin
+          if (ready_i[i] & v_o[i]) begin
+            rd_addr[i] <= rd_addr[i]+1'b1;
+            workload_id[i] <= workload_id[i]+1'b1;
+          end
+          v_o[i] <= '1;
         end
-        if (workload_id[i]+1==workload_limit_p) v_o[i] <= 1'b0;
-        else v_o[i] <= '1;
+        else begin
+          if (counter[i]>=(gen_freq_p-1)) begin
+            if (ready_i[i]) begin
+              v_o[i] <= '1;
+              workload_id[i] <= workload_id[i]+1'b1;
+              counter[i] <= 0;
+            end
+            else begin
+              v_o[i] <= '0;
+              counter[i] <= counter[i] + 1;
+            end
+          end
+          else begin
+            v_o[i] <= '0;
+            counter[i] <= counter[i] + 1;
+          end
+        end
+      end
+      else begin
+        v_o[i] <= 0;
       end
     end
   end

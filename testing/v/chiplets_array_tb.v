@@ -13,9 +13,12 @@ module chiplets_array_tb;
   parameter chiplets_routing_p = 0;
 
   parameter link_bandwidth_p = 4; // bytes / cycle
-  parameter num_macs_p = 1; // macs / cycle
+  parameter num_macs_p = 4; // macs / cycle
 
-  parameter integer macs_per_data_p[num_chiplets_x_p-1:0] = {2, 4};
+  parameter inital_size_p = 2;
+  parameter gen_freq_p = 5;
+
+  parameter integer macs_per_data_p[num_chiplets_x_p-1:0] = {3, 4};
 
   localparam width_p = id_width_p + size_width_p;
 
@@ -50,8 +53,10 @@ module chiplets_array_tb;
      .id_width_p(id_width_p)
     ,.size_width_p(size_width_p)
     ,.num_ports_p(num_chiplets_y_p)
+    ,.inital_size_p(inital_size_p)
+    ,.gen_freq_p(gen_freq_p)
     ,.els_p(2)
-    ,.workload_limit_p(30)
+    ,.workload_limit_p(50)
   ) data_gen_inst
       ( .clk_i(clk_i)
       , .reset_i(reset_i)
