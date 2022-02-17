@@ -1,79 +1,49 @@
 import time
-import CONSTANTS
 import multiprocessing
 import utils
-import ASICSpecs
-import IOScaling
-import VoltageScaling
-import TechScaling
-from DieCost import fill_yield
 
 from chiplet_system_elaborator import chiplet_elaborator
 
 if __name__ == '__main__':
-  utils.extra_header.append('chiplet_depth')
-  utils.extra_header.append('chiplet_width')
-  utils.extra_header.append('used_units')
   number_of_cores = multiprocessing.cpu_count()
   #print "Number of cores %d" % (number_of_cores)
   p = multiprocessing.Pool(number_of_cores)
   
-  PEs_per_col_constraints = [64]
-  techs = ['22nm']
-  PEs_on_chiplet =[4, 8, 16, 32, 64, 128, 256, 512, 1024] 
-  liquid_cool = False
+  techs = ['7nm']
+  # BF16 tera ops per second per chiplet
+  TOPS_per_chiplet = [40, 80, 160, 320] 
+  # MB memory per chiplet
+  MEM_per_chiplet = [40, 80, 160, 320] 
+
+  IO_bandwidth = 100.0 # GB/s
+  IO_count = 2*(IO_bandwidth/12.5) # transmitter and receiver
+
+  liquid_cool = True
 
   start_time = time.time()
   app='Chiplet'
+
+  
  
+  print 'tech_node', 'tops_per_asic', 'sram_per_asic', 'chiplets_per_board', 'die_area', 'watts_per_asic'
   for tech in techs:
-    default_spec=TechScaling.Classical(eval('ASICSpecs.'+app),tech, TechNorm="22nm")
-    Vth = CONSTANTS.TechData.loc[tech, 'Vth']
-    CoreVdd = CONSTANTS.TechData.loc[tech, 'CoreVdd']
-    Vdd = CoreVdd 
-    size = CONSTANTS.TechData.at[tech, "FeatureSize"]
-    asic_spec = VoltageScaling.RCAVoltageScaling(Vdd, Vdd, default_spec, tech)
-    
-    # Voltage scaling to get 1000Mhz frequency
-    if (size > 22) :
-      while (asic_spec['frequency'] < 1000) and (Vdd < 1.5 * CoreVdd):
-        Vdd += 0.005
-        asic_spec = VoltageScaling.RCAVoltageScaling(Vdd, Vdd, default_spec, tech)
+    designs = []
+    for TOPS in TOPS_per_chiplet:
+      for MEM in MEM_per_chiplet:
+        chiplet_elaborator([tech, TOPS, MEM, IO_count, liquid_cool])
+        #  designs.append([tech, TOPS, MEM, IO_count, liquid_cool])
       
-    elif (size < 22): 
-      while (asic_spec['frequency'] > 1000) and (Vdd >= Vth):
-        Vdd -= 0.005
-        asic_spec = VoltageScaling.RCAVoltageScaling(Vdd, Vdd, default_spec, tech)
-
-      
-    io_spec = IOScaling.GetSpec(tech)
-    RCA_performance = 1000 # GFLOPS/s
-    asic_spec['IO_count'] = 1 # just non zero for now
-    asic_spec['dram_count'] = 0
-    fill_yield(asic_spec, None, io_spec, tech)
-
-    #  for spec in asic_spec:
-      #  print spec, asic_spec[spec]
-      
-    for PEs_per_col in PEs_per_col_constraints:
-     designs = []
-     for x in PEs_on_chiplet:
-       if x > PEs_per_col:
-         continue
-       designs.append([asic_spec, io_spec, x, 1, PEs_per_col/x, RCA_performance, tech, False, liquid_cool])
-
-     results = p.map(chiplet_elaborator, designs)
-
-     if liquid_cool:
-       o_file = open(tech+'_'+str(PEs_per_col)+'PEs_per_lane_liquid_cool'+'.csv', 'w')
-     else:
-       o_file = open(tech+'_'+str(PEs_per_col)+'PEs_per_lane'+'.csv', 'w')
-     utils.fprintHeader(o_file, area_csv=True)
-     for result in results:
-       if result is not None:
-         o_file.write("%s" % result)
-         print "%s" % result
-     o_file.close()
+    # results = p.map(chiplet_elaborator, designs)
+    # if liquid_cool:
+    #   o_file = open(tech+'_liquid_cool'+'.csv', 'w')
+    # else:
+    #   o_file = open(tech+'_PEs_per_lane'+'.csv', 'w')
+    # utils.fprintHeader(o_file)
+    # for result in results:
+    #   if result is not None:
+    #     o_file.write("%s" % result)
+    #     #  print "%s" % result
+    # o_file.close()
   
   p.close()
   p.join()

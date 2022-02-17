@@ -12,29 +12,33 @@ import cStringIO
 #       'base_thermal_cond']
 
 asic_header = [
-   'lgc_vdd', 'sram_vdd', 'f_scale', 'mhash_per_asic', 'frequency',
-   'watts_per_asic', 'w_lgc', 'w_sram', 'dram_count', 'die_area','RCA_y']
+   'tech_node',
+   'lgc_vdd', 'sram_vdd', 'frequency',
+   'tops_per_asic', 'sram_per_asic',
+   'die_area', 'lgc_area', 'sram_area', 'io_area',
+   'watts_per_asic', 'w_lgc', 'w_sram', 'w_io', 'joules_per_tops']
 
 srv_header = [
-   'mhash_per_server', 'server_cost', 'silicon_cost', 'package_cost',
-   'heatsink_cost', 'fan_cost', 'dcdc_cost', 'psu_cost', 'system_cost',
-   'die_cost', 'server_power', 'asics_per_col', 'columns_per_lane',
-   'lanes_per_server', 'al_weight', 'al_cost', 'cu_weight', 'cu_cost',
-   'asics_per_server', 'num_of_chains', 'chain_length']
+   'die_cost', 'server_power', 
+   'asics_per_col', 'lanes_per_server', 'asics_per_server',
+   'tops_per_server', 
+   'server_cost', 'silicon_cost', 'package_cost',
+   'heatsink_cost', 'fan_cost', 'dcdc_cost', 'psu_cost', 'system_cost']
 
 tco_header = ['life_time_tco', 'DCAmortization', 'DCInterest', 'DCOpex', 
               'SrvAmortization', 'SrvInterest', 'SrvOpex', 'SrvPower', 'PUEOverhead']
 
-extra_header = ['units_per_die','threshold_voltage','pcb_cost','pcb_parts_cost',
+extra_header = ['threshold_voltage','pcb_cost','pcb_parts_cost',
                 'chassis_cost','cost_per_heatsink','cost_per_fan','power_per_fan',
                 'cost_per_package','dcdc_current','num_of_dcdc','cost_all_ethernet', 
-                'lgc_dyn_pwr', 'lgc_leak_pwr', 'sram_dyn_pwr', 'sram_leak_pwr',
-                'dram_mc_power','dies_per_wafer', 'joules_per_mhash', 'cost_all_drams',
-                'q_asic','at_least_working','provisioned_for', 'die_yield']
+                'dies_per_wafer',
+                'q_asic', 'die_yield']
 
-csv_header = [tco_header, srv_header, asic_header, extra_header]
-area_csv_header = [['tech_node', 'PEs_per_lane',
-                    'PEs_per_chiplet', 'chiplets_per_lane','chiplet_power',
+#  csv_header = [tco_header, srv_header, asic_header, extra_header]
+csv_header = [asic_header, srv_header, tco_header, extra_header]
+
+area_csv_header = [['tech_node', 
+                    'chiplets_per_lane','chiplet_power',
                     'die_area_init', 'chiplet_yield', 
                     'max_die_power_init', 'max_power_per_lane', 
                     'die_cost_init', 'total_silicon_area_init', 'total_silicon_cost_init',
@@ -99,7 +103,7 @@ def fprintHeader(o_file, area_csv=False):
    o_file.write('\n')
 # end of fprintHeader
 
-def fprintData(data_list,o_file, area_csv=False):
+def fprintData(data_list, o_file, area_csv=False):
    if area_csv:
       headers = area_csv_header
    else:
@@ -150,11 +154,10 @@ def printData(header_list, data_list):
 
 
 # selects extra specs to be saved
-def extra_specs_calculator (asic_spec, srv_spec, j,k,N, dpw, max_die_power, tech, die_y):
+def extra_specs_calculator (asic_spec, srv_spec, dpw, max_die_power, tech, die_y):
     # Extra Specs
     threshold_voltage = CONSTANTS.TechData.loc[tech, "Vth"]
     extra_spec = {
-      'units_per_die'    : N,
       'threshold_voltage': threshold_voltage,
       'pcb_cost'         : srv_spec['pcb_cost'],
       'pcb_parts_cost'   : srv_spec['pcb_parts_cost'],
@@ -166,33 +169,12 @@ def extra_specs_calculator (asic_spec, srv_spec, j,k,N, dpw, max_die_power, tech
       'dcdc_current'     : srv_spec['dcdc_current'],
       'num_of_dcdc'      : srv_spec['num_of_dcdc'],
       'cost_all_ethernet': srv_spec['cost_all_ethernet'],
-      'lgc_dyn_pwr'      : asic_spec['lgc_dyn_pwr']   * asic_spec['f_scale'] * N, 
-      'lgc_leak_pwr'     : asic_spec['lgc_leak_pwr']  * asic_spec['f_scale'] * N,
-      'sram_dyn_pwr'     : asic_spec['sram_dyn_pwr']  * asic_spec['f_scale'] * N,
-      'sram_leak_pwr'    : asic_spec['sram_leak_pwr'] * asic_spec['f_scale'] * N,
-      'dram_mc_power'    : asic_spec['dram_mc_power'], 
       'dies_per_wafer'   : dpw,
-      'joules_per_mhash' : asic_spec['joules_per_mhash'],
-      'cost_all_drams'   : srv_spec['cost_all_drams'],
       'q_asic'           : max_die_power,
-      'at_least_working' : j,  
-      'provisioned_for'  : k,
       'die_yield'        : die_y
     }
 
     return extra_spec 
 
-def delay_loader (techs):
-  delays = {}
-  for tech in techs:
-    size = filter(str.isdigit, tech)
-    table_path = os.environ['SCRIPTS_PATH']+'/'+size+'.table'
-    CoreVdd = CONSTANTS.TechData.loc[tech, 'CoreVdd']
-    df = pd.DataFrame.from_csv(table_path, index_col=False, parse_dates=False) #, sep=', ')
-    df.rename(columns= {'units: volts' : 'Vdd' , ' uamps' : 'I', ' V/I (relative delay)': 'Rdelay'}, inplace=True) 
-    df['Rdelay'] = df['Rdelay'] / df.loc[df['Vdd']==round(CoreVdd,3),'Rdelay'].values[0]
-    #df['freq'] = 1.0 / df['Rdelay']
-    delays[tech] = dict(zip(df.Vdd , df.Rdelay))
-  return delays
 
 

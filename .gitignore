@@ -6,5 +6,6 @@ out/
 *.swp
 *.pyc
 *.log
+*.csv
 ucli.key
 vc_hdrs.h
