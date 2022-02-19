@@ -3,9 +3,10 @@ import math
 import CONSTANTS
 
 # Reads logic and sram power as well as their vdd from asic_spec
-def evalServerCost(asic_spec, die_cost, hs_cost, asics_per_col, used_lanes):
+def evalServerCost(asic_spec, die_cost, hs_cost, asics_per_col, chiplets_per_board):
    
-   num_of_asics = asics_per_col * used_lanes
+   num_of_asics = chiplets_per_board
+   used_lanes = math.ceil(chiplets_per_board / asics_per_col)
    srv_spec = {
       'asics_per_col'   : asics_per_col,
       'lanes_per_server': used_lanes,

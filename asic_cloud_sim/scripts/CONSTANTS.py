@@ -176,6 +176,16 @@ real_sram_power = {'7nm': 0.0, '5nm': 0.0}
 # IOs power W/count, each one is 12.5GB/s, 7 and 5nm is fake
 real_io_power = {'16nm': 0.175, '7nm': 0.175, '5nm': 0.175}
 
+# ---------------------------------------------------------------------------- #
+# Applications
+# ---------------------------------------------------------------------------- #
+# Memory needed for each stage, in MB
+mem_per_stage = {'GPT3': 3840/3}
+# Stage per board
+stage_per_board = {'GPT3': 3}
+# Boards needed
+num_boards = {'GPT3': 97}
+
 
 
 if __name__ == '__main__':

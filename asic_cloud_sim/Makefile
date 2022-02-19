@@ -5,9 +5,13 @@ export PYTHONPATH := ${PYTHONPATH}:$(SCRIPTS_PATH)
 IMAGE_FORMAT ?= pdf
 export IMAGE_FORMAT
 
-test:
-	$(PYTHON) chiplet_system_analysis.py
+all: gen opt
 
+gen:
+	$(PYTHON) chiplet_system_gen.py
+
+opt:
+	$(PYTHON) chiplet_system_opt.py
 
 clean:
 	-rm -f *.tco

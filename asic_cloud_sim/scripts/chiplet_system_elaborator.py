@@ -9,11 +9,12 @@ import utils
 import math
 
 def chiplet_elaborator(design): 
-  # Needed memory for each board in MB, 
-  mem_per_board = 3840 # GPT3
 
-  [tech, tops, mem_size, IO_count, liquid_cool, use_total_power] = design
   results = cStringIO.StringIO() 
+  [app, tech, tops, mem_size, IO_count, liquid_cool, use_total_power] = design
+
+  mem_per_stage = CONSTANTS.mem_per_stage[app]
+  stage_per_board = CONSTANTS.stage_per_board[app]
 
   # calculate chiplet MAC, memory and IO area per die
   asic_spec = {'tech_node':tech, 'lgc_vdd':0.8, 'sram_vdd':0.8, 'frequency': 1, 'other_area': 10.0}
@@ -36,9 +37,10 @@ def chiplet_elaborator(design):
   (die_cost, dpw) = die_cost_calc(die_area, die_yield, tech)
   
   # calculate # of chiplets per board
-  chiplets_per_board = math.ceil(mem_per_board / mem_size)
-  chiplets_per_lane = math.ceil(chiplets_per_board / CONSTANTS.lanes_per_server)
-  used_lanes = math.ceil(chiplets_per_board / chiplets_per_lane)
+  chiplets_per_stage = math.ceil(mem_per_stage / mem_size)
+  chiplets_per_board = chiplets_per_stage * stage_per_board
+  chiplets_per_lane = math.ceil(math.sqrt(chiplets_per_board))
+  #  chiplets_per_lane = math.ceil(chiplets_per_board / CONSTANTS.lanes_per_server)
 
   # Calculate power and performance based on provisioning
   if use_total_power:
@@ -85,22 +87,23 @@ def chiplet_elaborator(design):
   asic_spec['die_cost'] = die_cost
     
   # Server cost and power calculation  
-  srv_spec = ServerCost.evalServerCost(asic_spec, die_cost, hs_cost, chiplets_per_lane, used_lanes)
+  srv_spec = ServerCost.evalServerCost(asic_spec, die_cost, hs_cost, chiplets_per_lane, chiplets_per_board)
   srv_spec['server_chip_power'] = asic_spec['watts_per_asic']*srv_spec['asics_per_server']
+  if srv_spec['server_chip_power'] > 1000.0:
+    print 'Board power limit exceeded!! In tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', has total board chip power of ', srv_spec['server_chip_power'], 'and the max power is 1000'
+    return
 
   # Evaluate TCO
   dc_spec = TCO.evalTCO(srv_spec['server_power'],
                         srv_spec['server_cost'],
                         CONSTANTS.SrvLife)
-
+  dc_spec['num_boards'] = CONSTANTS.num_boards[app]
   # ----------------------------------------------------------------------------
-  extra_spec = utils.extra_specs_calculator (asic_spec, srv_spec, 
+  extra_spec = utils.extra_specs_calculator (dc_spec, srv_spec, 
                                              dpw, max_die_power, tech,
                                              die_yield)
   
   utils.fprintData([asic_spec, srv_spec, dc_spec, extra_spec], results, True)
 
-  #  print asic_spec['tech_node'], '     ', asic_spec['tops_per_asic'], '    \t', asic_spec['sram_per_asic'], '   \t\t', chiplets_per_board, '           ', asic_spec['die_area'], asic_spec['watts_per_asic']
-    
   return results.getvalue() 
 

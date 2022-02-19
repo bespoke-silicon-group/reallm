@@ -33,7 +33,6 @@ srv_header = [
 
 srv_header_simple = [
    'asics_per_server',
-   'server_chip_power', 
    'server_power', 
    'tops_per_server',
    'server_cost'
@@ -42,16 +41,17 @@ srv_header_simple = [
 tco_header = ['life_time_tco', 'DCAmortization', 'DCInterest', 'DCOpex', 
               'SrvAmortization', 'SrvInterest', 'SrvOpex', 'SrvPower', 'PUEOverhead']
 
-tco_header_simple = ['life_time_tco']
+tco_header_simple = ['life_time_tco', 'num_boards']
 
 extra_header = ['threshold_voltage','pcb_cost','pcb_parts_cost',
                 'chassis_cost','cost_per_heatsink','cost_per_fan','power_per_fan',
                 'cost_per_package','dcdc_current','num_of_dcdc','cost_all_ethernet', 
                 'dies_per_wafer',
                 'q_asic', 'die_yield']
+extra_header_simple = ['cost_per_tops', 'watts_per_tops', 'tco_per_tops']
 
 csv_header = [asic_header, srv_header, tco_header, extra_header]
-simple_csv_header = [asic_header_simple, srv_header_simple, tco_header_simple]
+simple_csv_header = [asic_header_simple, srv_header_simple, tco_header_simple, extra_header_simple]
 
 def gerometric_list (start, stop, step):
   result = []
@@ -140,7 +140,6 @@ def csv2df(csvfile):
 def printHeader(header_list):
    i = 1
 
-   print '#',
    for header in header_list:
       for h in header:
          print '[{0:d}]{1:s},'.format(i, h),
@@ -160,7 +159,7 @@ def printData(header_list, data_list):
 
 
 # selects extra specs to be saved
-def extra_specs_calculator (asic_spec, srv_spec, dpw, max_die_power, tech, die_y):
+def extra_specs_calculator (dc_spec, srv_spec, dpw, max_die_power, tech, die_y):
     # Extra Specs
     threshold_voltage = CONSTANTS.TechData.loc[tech, "Vth"]
     extra_spec = {
@@ -177,7 +176,10 @@ def extra_specs_calculator (asic_spec, srv_spec, dpw, max_die_power, tech, die_y
       'cost_all_ethernet': srv_spec['cost_all_ethernet'],
       'dies_per_wafer'   : dpw,
       'q_asic'           : max_die_power,
-      'die_yield'        : die_y
+      'die_yield'        : die_y,
+      'cost_per_tops'    : srv_spec['server_cost']/srv_spec['tops_per_server'],
+      'watts_per_tops'   : srv_spec['server_power']/srv_spec['tops_per_server'],
+      'tco_per_tops'     : dc_spec['life_time_tco']/srv_spec['tops_per_server']
     }
 
     return extra_spec 
