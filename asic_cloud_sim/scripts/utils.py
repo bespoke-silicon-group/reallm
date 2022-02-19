@@ -16,7 +16,13 @@ asic_header = [
    'lgc_vdd', 'sram_vdd', 'frequency',
    'tops_per_asic', 'sram_per_asic',
    'die_area', 'lgc_area', 'sram_area', 'io_area',
-   'watts_per_asic', 'w_lgc', 'w_sram', 'w_io', 'joules_per_tops']
+   'watts_per_asic', 'w_lgc', 'w_sram', 'w_io', 
+   'watts_per_mm2', 'joules_per_tops']
+
+asic_header_simple = [
+   'tech_node', 'sram_per_asic', 'tops_per_asic', 
+   'die_area', 'watts_per_asic',
+   'watts_per_mm2', 'die_cost']
 
 srv_header = [
    'die_cost', 'server_power', 
@@ -25,8 +31,18 @@ srv_header = [
    'server_cost', 'silicon_cost', 'package_cost',
    'heatsink_cost', 'fan_cost', 'dcdc_cost', 'psu_cost', 'system_cost']
 
+srv_header_simple = [
+   'asics_per_server',
+   'server_chip_power', 
+   'server_power', 
+   'tops_per_server',
+   'server_cost'
+   ]
+
 tco_header = ['life_time_tco', 'DCAmortization', 'DCInterest', 'DCOpex', 
               'SrvAmortization', 'SrvInterest', 'SrvOpex', 'SrvPower', 'PUEOverhead']
+
+tco_header_simple = ['life_time_tco']
 
 extra_header = ['threshold_voltage','pcb_cost','pcb_parts_cost',
                 'chassis_cost','cost_per_heatsink','cost_per_fan','power_per_fan',
@@ -34,18 +50,8 @@ extra_header = ['threshold_voltage','pcb_cost','pcb_parts_cost',
                 'dies_per_wafer',
                 'q_asic', 'die_yield']
 
-#  csv_header = [tco_header, srv_header, asic_header, extra_header]
 csv_header = [asic_header, srv_header, tco_header, extra_header]
-
-area_csv_header = [['tech_node', 
-                    'chiplets_per_lane','chiplet_power',
-                    'die_area_init', 'chiplet_yield', 
-                    'max_die_power_init', 'max_power_per_lane', 
-                    'die_cost_init', 'total_silicon_area_init', 'total_silicon_cost_init',
-                    'dark_silicon_used', 'die_area_last',
-                    'die_cost_last', 'total_silicon_area_last', 'total_silicon_cost_last'], 
-                    tco_header, srv_header, asic_header, extra_header]
-                    # last is  considered max die power and add dark silicon
+simple_csv_header = [asic_header_simple, srv_header_simple, tco_header_simple]
 
 def gerometric_list (start, stop, step):
   result = []
@@ -88,9 +94,9 @@ def float_format(value, valtype="Regular", dtz=True, dd=1):
 
   return strval
 
-def fprintHeader(o_file, area_csv=False):
-   if area_csv:
-      headers = area_csv_header
+def fprintHeader(o_file, simple_csv=False):
+   if simple_csv:
+      headers = simple_csv_header
    else:
       headers = csv_header
    i = 1
@@ -103,9 +109,9 @@ def fprintHeader(o_file, area_csv=False):
    o_file.write('\n')
 # end of fprintHeader
 
-def fprintData(data_list, o_file, area_csv=False):
-   if area_csv:
-      headers = area_csv_header
+def fprintData(data_list, o_file, simple_csv=False):
+   if simple_csv:
+      headers = simple_csv_header
    else:
       headers = csv_header
    i = 0

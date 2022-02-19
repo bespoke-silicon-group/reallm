@@ -124,7 +124,8 @@ TechData   = pd.DataFrame([[          7.0,  0.35,      0.75,    0.004,          
 # Yield 
 # ---------------------------------------------------------------------------- #
 
-alphas = {'7nm': 25.0
+alphas = {'5nm': 25.0
+        , '7nm': 25.0 # ????
         , '10nm': 24.06209 # ????
         , '16nm': 22.06209
         , '22nm' : 18.56382 # ????
@@ -137,8 +138,9 @@ alphas = {'7nm': 25.0
         , '250nm' : 5.700713
         }
     
-D0s = {'7nm'  : 0.0045 # ????
-     , '10nm' : 0.0040 # ????
+D0s = {'5nm'  : 0.001 # ????
+     , '7nm'  : 0.001 # ????
+     , '10nm' : 0.001 # ????
      , '16nm' : 0.003418466
      , '22nm'  : 0.002806611 # ????
      , '28nm'  : 0.002206611
@@ -149,6 +151,31 @@ D0s = {'7nm'  : 0.0045 # ????
      , '180nm'  : 0.001270288
      , '250nm'  : 0.001084176
      }
+# This is defects/mm2 = defects/cm2 /100
+
+
+# ---------------------------------------------------------------------------- #
+# ML Chips
+# ---------------------------------------------------------------------------- #
+
+# SRAM density mm2/MB, data from real implementations
+real_sram_size = {'16nm': 1.28, '7nm': 0.45, '5nm': 0.35}
+# MACs density mm2/Tera BF16 ops, data from real implementations
+real_macs_size = {'7nm': 0.29, '5nm': 0.22}
+# IOs density mm2/count, each one is 12.5GB/s, 7 and 5nm is fake
+real_io_size = {'16nm': 0.3, '7nm': 0.3, '5nm': 0.3}
+
+# Total Power Model, W/Tera BF16 ops
+real_total_power = {'7nm': 1.2, '5nm': 1.0}
+
+# Seprate Power Model
+# MACs dynamic power W/Tera BF16 ops, fake data
+real_macs_power = {'7nm': 0.8, '5nm': 0.6}
+# SRAM dynamic power W/MB, fake data
+real_sram_power = {'7nm': 0.0, '5nm': 0.0}
+# IOs power W/count, each one is 12.5GB/s, 7 and 5nm is fake
+real_io_power = {'16nm': 0.175, '7nm': 0.175, '5nm': 0.175}
+
 
 
 if __name__ == '__main__':

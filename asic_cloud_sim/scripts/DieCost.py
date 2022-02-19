@@ -81,6 +81,7 @@ def die_area_calc(asic_spec):
   die_area = asic_spec['lgc_area'] + asic_spec['sram_area'] + \
              asic_spec['io_area'] + \
              asic_spec['other_area']
+  die_area = die_area / 0.7
   side = math.sqrt(die_area)
   L = 0.35
   patterning_area = 4.0 * L * (side + L)
