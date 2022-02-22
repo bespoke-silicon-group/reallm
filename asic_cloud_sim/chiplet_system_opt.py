@@ -1,7 +1,5 @@
 import csv
 
-opt_goal = 'cost_per_tops'
-
 f = open('results.csv')
 csvreader = csv.reader(f)
 

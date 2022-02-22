@@ -13,6 +13,9 @@ gen:
 opt:
 	$(PYTHON) chiplet_system_opt.py
 
+plot:
+	$(PYTHON) chiplet_system_plot.py
+
 clean:
 	-rm -f *.tco
 	-rm -f *.csv

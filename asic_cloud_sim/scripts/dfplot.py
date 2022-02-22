@@ -109,6 +109,7 @@ def line(dataframe, x, y,
   kwargs['fillstyle']  = kwargs.get('fillstyle',  'full')
   kwargs['linestyle']  = kwargs.get('linestyle',  ':')
 
+
   if key != None:
     keys = dataframe[key].unique().tolist()
     if sort_key:
@@ -181,7 +182,7 @@ def line(dataframe, x, y,
   ax.get_xaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: utils.float_format(x, dd=2)))
   ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: utils.float_format(x, dd=2)))
 
-  legend_location(keyloc, **kwargs)
+  #  legend_location(keyloc, **kwargs)
 
   # Do show() and savefig() after post-function-call adjustments with the ax handle.
   # plt.show()
@@ -295,7 +296,8 @@ def line_multi_keys(dataframe, x, y,
         used_markers[int(l1[:-2])] = marker
         df0 = dataframe[dataframe[key[0]] == k0]
         df = df0[df0[key[1]] == k1]
-        df.plot.line(x, y, marker=marker, color=color, **kwargs)
+        if not df.empty:
+          df.plot.line(x, y, marker=marker, color=color, **kwargs)
   else:
     kwargs['marker'] = kwargs.get('marker', 'o')
     if ( dataframe[x].min() == dataframe[x].max() ): # fallback to ax.plot to avoid "UserWarning: Attempting to set identical left==right results"; should be a bug in Pandas

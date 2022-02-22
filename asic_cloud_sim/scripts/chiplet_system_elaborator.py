@@ -11,15 +11,18 @@ import math
 def chiplet_elaborator(design): 
 
   results = cStringIO.StringIO() 
-  [app, tech, tops, mem_size, IO_count, liquid_cool, use_total_power] = design
+  [app, tech, tops, mem_size, IO_BW, liquid_cool, use_total_power] = design
 
-  mem_per_stage = CONSTANTS.mem_per_stage[app]
-  stage_per_board = CONSTANTS.stage_per_board[app]
+  #  mem_per_stage = CONSTANTS.mem_per_stage[app]
+  #  stage_per_board = CONSTANTS.stage_per_board[app]
+  mem_per_board = CONSTANTS.mem_per_board[app]
 
   # calculate chiplet MAC, memory and IO area per die
   asic_spec = {'tech_node':tech, 'lgc_vdd':0.8, 'sram_vdd':0.8, 'frequency': 1, 'other_area': 10.0}
   asic_spec['lgc_area'] = tops * CONSTANTS.real_macs_size[tech]
   asic_spec['sram_area'] = mem_size * CONSTANTS.real_sram_size[tech]
+  asic_spec['io_bw'] = IO_BW
+  IO_count = 2*(IO_BW/12.5) # transmitter and receiver
   asic_spec['io_area'] = IO_count * CONSTANTS.real_io_size[tech]
   asic_spec['tops_per_asic'] = tops
   asic_spec['sram_per_asic'] = mem_size
@@ -37,10 +40,12 @@ def chiplet_elaborator(design):
   (die_cost, dpw) = die_cost_calc(die_area, die_yield, tech)
   
   # calculate # of chiplets per board
-  chiplets_per_stage = math.ceil(mem_per_stage / mem_size)
-  chiplets_per_board = chiplets_per_stage * stage_per_board
+  #  chiplets_per_stage = math.ceil(mem_per_stage / mem_size)
+  #  chiplets_per_board = chiplets_per_stage * stage_per_board
+  chiplets_per_board = 0
+  for mem_per_stage in mem_per_board:
+    chiplets_per_board += math.ceil(mem_per_stage / mem_size)
   chiplets_per_lane = math.ceil(math.sqrt(chiplets_per_board))
-  #  chiplets_per_lane = math.ceil(chiplets_per_board / CONSTANTS.lanes_per_server)
 
   # Calculate power and performance based on provisioning
   if use_total_power:

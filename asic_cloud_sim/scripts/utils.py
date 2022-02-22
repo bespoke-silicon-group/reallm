@@ -20,9 +20,9 @@ asic_header = [
    'watts_per_mm2', 'joules_per_tops']
 
 asic_header_simple = [
-   'tech_node', 'sram_per_asic', 'tops_per_asic', 
+   'tech_node', 'sram_per_asic', 'tops_per_asic', 'io_bw',
    'die_area', 'watts_per_asic',
-   'watts_per_mm2', 'die_cost']
+   'die_cost']
 
 srv_header = [
    'die_cost', 'server_power', 
@@ -142,7 +142,8 @@ def printHeader(header_list):
 
    for header in header_list:
       for h in header:
-         print '[{0:d}]{1:s},'.format(i, h),
+         #  print '[{0:d}]{1:s},'.format(i, h),
+         print '{1:s},'.format(h),
          i += 1
    print
 # end of printHeader

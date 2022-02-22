@@ -1,4 +1,5 @@
 import math
+import csv
 
 def generate_routings(model, chiplet_size):
   # possible_routings = {'layer name': [[n_C, n_M], ]}
@@ -20,7 +21,6 @@ def generate_routings(model, chiplet_size):
           new_routing = {'Q':Q_routing, 'K':Q_routing, 'V':Q_routing, 'Atten_FC':AFC_routing, 'FC1':FC1_routing, 'FC2':FC2_routing}
           routings.append(new_routing)
   
-  # print(routings)
   return routings
 
 def analysis(model, routing, link_GBs, chiplet_TOPS):
@@ -74,7 +74,7 @@ def analysis(model, routing, link_GBs, chiplet_TOPS):
     #  print(layer, 'Layers: ')
     #  print(input_delay,  mid_links_delay, compute_delay)
   
-  #  print('Throughput is', 1e6/bottleneck, 'latency is ', 96*layer_delay)
+  #  print('Throughput is', 1e6/bottleneck, 'latency is ', 96*layer_delay, 'bottleneck is', bottleneck)
 
   return 1e6/bottleneck, 96*layer_delay, bottleneck
 
@@ -85,38 +85,83 @@ D = 12288
 model = {'Q': [D, D], 'K': [D, D], 'V': [D, D], 'Atten_FC': [D, D], 'FC1': [D, 4*D], 'FC2': [4*D, D]} 
 
 
-chiplet_sizes = [40, 80, 160, 320] # MB
-chiplet_TOPS = [40, 80, 160, 320] # TOPS
+csvf = open('../asic_cloud_sim/results.csv')
+csvreader = csv.reader(csvf)
 
-link_GBs = 100 
-freq_GHz = 1 
+headers = next(csvreader)[:-1]
+header_index = {'sram_per_asic': None, 'tops_per_asic': None, 'io_bw': None, 'server_cost': None, 'server_power': None, 'life_time_tco': None}
+for i in range(len(headers)):
+  for h in header_index:
+    if h in headers[i]:
+      header_index[h] = i
 
-for chiplet_size in chiplet_sizes:
-  for TOPS in chiplet_TOPS:
-    routings = generate_routings(model, chiplet_size)
+o_file = open('routing_opt_results'+'.csv', 'w')
+#  headers.append('routing')
+headers.append('thru')
+headers.append('delay')
+headers.append('watts_per_thru')
+headers.append('cost_per_thru')
+headers.append('tco_per_thru')
+headers.append('watts_delay')
+headers.append('cost_delay')
+headers.append('tco_delay')
+for h in headers[:]:
+  o_file.write("%s,"% h)
+o_file.write('\n')
 
-    throughput = 0
-    latency = 1e12
-    th_best_routing = None
-    bb = 0
-    for routing in routings:
-      new_th, new_delay, bottleneck = analysis(model, routing, link_GBs, TOPS)
-      if new_th > throughput:
-        throughput = new_th
-        latency = new_delay
-        th_best_routing = routing
-        bb = bottleneck
-      elif new_th == throughput:
-        if new_delay < latency:
-          latency = new_delay
-          th_best_routing = routing
-          bb = bottleneck
-      #  if new_delay <= latency:
-        #  latency = new_delay
-        #  latency_best = routing
-    
-    #  print('========',chiplet_size,'MB  ', TOPS, 'TOPS  =========')
-    #  print(int(throughput), int(latency), 'us')
-    print(int(throughput), int(latency)/1000)
-    #  print(th_best_routing, bb)
+best_tco_per_thru = 1e12
+best_tco_delay = 1e12
+best_tco_per_thru_design = None
+best_tco_delay_design = None
+for row in csvreader:
+  new_row = row[:-1]
+  chiplet_size = float(row[header_index['sram_per_asic']])
+  TOPS = float(row[header_index['tops_per_asic']])
+  link_GBs = float(row[header_index['io_bw']])
+  server_cost = float(row[header_index['server_cost']])
+  server_power = float(row[header_index['server_power']])
+  life_time_tco = float(row[header_index['life_time_tco']])
+
+  routings = generate_routings(model, chiplet_size)
+
+  best_thru = 0
+  best_thru_lat = 1e12
+  best_thru_routing = None
+  for routing in routings:
+    new_th, new_delay, bottleneck = analysis(model, routing, link_GBs, TOPS)
+    if new_th > best_thru:
+      best_thru = new_th
+      best_thru_lat = new_delay
+      best_thru_routing = routing
+    elif new_th == best_thru:
+      if new_delay < best_thru_lat:
+        best_thru_lat = new_delay
+        best_thru_routing = routing
+  
+  #  new_row.append(best_thru_routing)
+  new_row.append(math.floor(best_thru))
+  new_row.append(best_thru_lat/1000)
+  new_row.append(server_power/math.floor(best_thru)*1000)
+  new_row.append(server_cost/math.floor(best_thru)*1000)
+  tco_per_thru = life_time_tco/math.floor(best_thru)*1000
+  new_row.append(tco_per_thru)
+  new_row.append(server_power * best_thru_lat/1000000)
+  new_row.append(server_cost * best_thru_lat/1000000)
+  tco_delay = life_time_tco * best_thru_lat/1000000
+  new_row.append(tco_delay)
+  for r in new_row:
+    o_file.write("%s,"% r)
+  o_file.write('\n')
+
+  if tco_per_thru < best_tco_per_thru:
+    best_tco_per_thru_design= [chiplet_size, TOPS, best_thru_routing]
+    best_tco_per_thru = tco_per_thru
+  if tco_delay < best_tco_delay:
+    best_tco_delay_design = [chiplet_size, TOPS, best_thru_routing]
+    best_tco_delay = tco_delay
+
+  #  print('========',chiplet_size,'MB  ', TOPS, 'TOPS  =========')
+  #  print(int(best_thru), int(best_thru_lat)/1000)
+o_file.close()
+
 

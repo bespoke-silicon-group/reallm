@@ -183,6 +183,8 @@ real_io_power = {'16nm': 0.175, '7nm': 0.175, '5nm': 0.175}
 mem_per_stage = {'GPT3': 3840/3}
 # Stage per board
 stage_per_board = {'GPT3': 3}
+# Memory needed for each board
+mem_per_board = {'GPT3': [320, 320, 320, 320, 1280, 1280]}
 # Boards needed
 num_boards = {'GPT3': 97}
 

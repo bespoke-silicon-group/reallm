@@ -7,5 +7,6 @@ out/
 *.pyc
 *.log
 *.csv
+*.pdf
 ucli.key
 vc_hdrs.h
