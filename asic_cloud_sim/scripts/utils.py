@@ -22,7 +22,7 @@ asic_header = [
 asic_header_simple = [
    'tech_node', 'sram_per_asic', 'tops_per_asic', 'io_bw',
    'die_area', 'watts_per_asic',
-   'die_cost']
+   'die_cost', 'asic_hot']
 
 srv_header = [
    'die_cost', 'server_power', 
@@ -35,7 +35,8 @@ srv_header_simple = [
    'asics_per_server',
    'server_power', 
    'tops_per_server',
-   'server_cost'
+   'server_cost',
+   'server_hot'
    ]
 
 tco_header = ['life_time_tco', 'DCAmortization', 'DCInterest', 'DCOpex', 

@@ -127,6 +127,9 @@ for row in csvreader:
   best_thru = 0
   best_thru_lat = 1e12
   best_thru_routing = None
+  best_lat_thru = 0
+  best_lat = 1e12
+  best_lat_routing = None
   for routing in routings:
     new_th, new_delay, bottleneck = analysis(model, routing, link_GBs, TOPS)
     if new_th > best_thru:
@@ -137,6 +140,15 @@ for row in csvreader:
       if new_delay < best_thru_lat:
         best_thru_lat = new_delay
         best_thru_routing = routing
+  
+    if new_delay < best_lat:
+      best_lat = new_delay
+      best_lat_thru = new_th
+      best_lat_routing = routing
+    elif new_delay == best_lat:
+      if new_th < best_lat_thru:
+        best_lat_thru = new_th
+        best_lat_routing = routing
   
   #  new_row.append(best_thru_routing)
   new_row.append(math.floor(best_thru))
@@ -164,4 +176,5 @@ for row in csvreader:
   #  print(int(best_thru), int(best_thru_lat)/1000)
 o_file.close()
 
-
+print(best_tco_per_thru_design)
+print(best_tco_delay_design)

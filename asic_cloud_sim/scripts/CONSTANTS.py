@@ -176,6 +176,9 @@ real_sram_power = {'7nm': 0.0, '5nm': 0.0}
 # IOs power W/count, each one is 12.5GB/s, 7 and 5nm is fake
 real_io_power = {'16nm': 0.175, '7nm': 0.175, '5nm': 0.175}
 
+# Board Max Power
+board_max_power = 1000.0
+
 # ---------------------------------------------------------------------------- #
 # Applications
 # ---------------------------------------------------------------------------- #

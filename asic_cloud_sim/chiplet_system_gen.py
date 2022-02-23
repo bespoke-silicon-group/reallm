@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
   IO_bandwidth = 12.5 # GB/s
 
-  liquid_cool = False
+  keep_large_power = False
   use_total_power = True
 
   start_time = time.time()
@@ -26,9 +26,9 @@ if __name__ == '__main__':
     designs = []
     for MEM in MEM_per_chiplet:
       # BF16 tera ops per second per chiplet
-      TOPS_per_chiplet = np.arange(0.01*MEM, 0.4*MEM, 0.02*MEM, dtype=float)
+      TOPS_per_chiplet = np.arange(0.01*MEM, 0.5*MEM, 0.02*MEM, dtype=float)
       for TOPS in TOPS_per_chiplet:
-        designs.append([app, tech, TOPS, MEM, IO_bandwidth, liquid_cool, use_total_power])
+        designs.append([app, tech, TOPS, MEM, IO_bandwidth, keep_large_power, use_total_power])
       
     results = p.map(chiplet_elaborator, designs)
     o_file = open('results'+'.csv', 'w')

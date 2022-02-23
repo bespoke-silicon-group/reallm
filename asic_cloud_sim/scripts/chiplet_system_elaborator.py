@@ -11,7 +11,7 @@ import math
 def chiplet_elaborator(design): 
 
   results = cStringIO.StringIO() 
-  [app, tech, tops, mem_size, IO_BW, liquid_cool, use_total_power] = design
+  [app, tech, tops, mem_size, IO_BW, keep_large_power, use_total_power] = design
 
   #  mem_per_stage = CONSTANTS.mem_per_stage[app]
   #  stage_per_board = CONSTANTS.stage_per_board[app]
@@ -61,7 +61,7 @@ def chiplet_elaborator(design):
   asic_spec['joules_per_tops'] = asic_spec['watts_per_asic'] / \
                                   asic_spec['tops_per_asic'] 
 
-  if liquid_cool:
+  if False: # No water cooling for now
     # Fake water cooling
     hs_cost = 'water'
     max_die_power = 500.0/chiplets_per_lane
@@ -70,8 +70,13 @@ def chiplet_elaborator(design):
     (max_die_power, hs_cost) = evalHS(die_area, chiplets_per_lane)
 
     if 1.1*max_die_power <= asic_spec['watts_per_asic']:
-      print 'TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(', (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power
-      return
+      if keep_large_power:
+        asic_spec['asic_hot'] = 1.0
+      else:
+        print 'TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(', (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power
+        return
+    else:
+      asic_spec['asic_hot'] = 0.0
 
     # flag = False
     # while (max_die_power <= asic_spec['watts_per_asic']) and (die_area <= 600.0):
@@ -94,9 +99,14 @@ def chiplet_elaborator(design):
   # Server cost and power calculation  
   srv_spec = ServerCost.evalServerCost(asic_spec, die_cost, hs_cost, chiplets_per_lane, chiplets_per_board)
   srv_spec['server_chip_power'] = asic_spec['watts_per_asic']*srv_spec['asics_per_server']
-  if srv_spec['server_chip_power'] > 1000.0:
-    print 'Board power limit exceeded!! In tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', has total board chip power of ', srv_spec['server_chip_power'], 'and the max power is 1000'
-    return
+  if srv_spec['server_chip_power'] > CONSTANTS.board_max_power:
+    if keep_large_power:
+      srv_spec['server_hot'] = 1.0
+    else:
+      print 'Board power limit exceeded!! In tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', has total board chip power of ', srv_spec['server_chip_power'], 'and the max power is 1000'
+      return
+  else:
+    srv_spec['server_hot'] = 0.0
 
   # Evaluate TCO
   dc_spec = TCO.evalTCO(srv_spec['server_power'],
