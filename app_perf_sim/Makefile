@@ -8,8 +8,11 @@ export IMAGE_FORMAT
 gen:
 	python gpt_analysis.py
 
-plot:
-	$(PYTHON) plot.py
+pareto:
+	$(PYTHON) plot_pareto.py
+
+sys:
+	python plot_system.py
 
 clean:
 	-rm -f *.csv

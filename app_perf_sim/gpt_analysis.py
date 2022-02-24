@@ -23,7 +23,7 @@ def generate_routings(model, chiplet_size):
   
   return routings
 
-def analysis(model, routing, link_GBs, chiplet_TOPS):
+def analysis(model, routing, link_GBs, chiplet_TOPS, verbose=False):
   # Now assume Q, K, V have the same routings
   if routing['K'] != routing['Q'] or routing['V'] != routing['Q']:
     print('QKV routing error!')
@@ -48,6 +48,7 @@ def analysis(model, routing, link_GBs, chiplet_TOPS):
   
   bottleneck = 0
   layer_delay = 0
+  constraints = None
   for layer in ['Q', 'Atten_FC', 'FC1', 'FC2']:
     num_chiplets = routing[layer][0] * routing[layer][1]
     if layer == 'Q':
@@ -63,21 +64,56 @@ def analysis(model, routing, link_GBs, chiplet_TOPS):
   
     if input_delay > bottleneck:
       bottleneck = input_delay
+      constraints = 'link'
     if mid_link_delay > bottleneck:
       bottleneck = mid_link_delay
+      constraints = 'link'
     if stage_delay > bottleneck:
       bottleneck = stage_delay
+      constraints = 'compute'
     layer_delay += (input_delay+mid_links_delay+compute_delay)
   
     pre_out_chiplets = all_out_chiplets[layer]
   
-    #  print(layer, 'Layers: ')
-    #  print(input_delay,  mid_links_delay, compute_delay)
+    if verbose:
+      print(layer, 'Layers: ')
+      print(input_delay,  mid_links_delay, compute_delay)
   
-  #  print('Throughput is', 1e6/bottleneck, 'latency is ', 96*layer_delay, 'bottleneck is', bottleneck)
+  if verbose:
+    print('Throughput is', 1e6/bottleneck, 'latency is ', 96*layer_delay, 'bottleneck is', bottleneck, constraints, 'constraints')
 
   return 1e6/bottleneck, 96*layer_delay, bottleneck
 
+def opt_routings(model, chiplet_size, TOPS, link_GBs):
+  routings = generate_routings(model, chiplet_size)
+
+  opt_thru = 0
+  opt_thru_delay = 1e12
+  opt_thru_routing = None
+  opt_delay = 1e12
+  opt_delay_thru = 0
+  opt_delay_routing = None
+  for routing in routings:
+    new_thru, new_delay, bottleneck = analysis(model, routing, link_GBs, TOPS)
+    if new_thru > opt_thru:
+      opt_thru = new_thru
+      opt_thru_delay = new_delay
+      opt_thru_routing = routing
+    elif new_thru == opt_thru:
+      if new_delay < opt_thru_delay:
+        opt_thru_delay = new_delay
+        opt_thru_routing = routing
+  
+    if new_delay < opt_delay:
+      opt_delay = new_delay
+      opt_delay_thru = new_thru
+      opt_delay_routing = routing
+    elif new_delay == opt_delay:
+      if new_thru > opt_delay_thru:
+        opt_delay_thru = new_thru
+        opt_delay_routing = routing
+
+  return [opt_thru, opt_thru_delay, opt_thru_routing], [opt_delay, opt_delay_thru, opt_delay_routing]
 
 
 D = 12288
@@ -96,15 +132,20 @@ for i in range(len(headers)):
       header_index[h] = i
 
 o_file = open('routing_opt_results'+'.csv', 'w')
-#  headers.append('routing')
-headers.append('thru')
-headers.append('delay')
-headers.append('watts_per_thru')
-headers.append('cost_per_thru')
-headers.append('tco_per_thru')
-headers.append('watts_delay')
-headers.append('cost_delay')
-headers.append('tco_delay')
+
+headers.append('opt_thru')
+headers.append('opt_thru_delay')
+#  headers.append('opt_thru_routing')
+headers.append('watts_per_opt_thru')
+headers.append('cost_per_opt_thru')
+headers.append('tco_per_opt_thru')
+
+headers.append('opt_delay')
+headers.append('opt_delay_thru')
+#  headers.append('opt_delay_routing')
+headers.append('watts_opt_delay')
+headers.append('cost_opt_delay')
+headers.append('tco_opt_delay')
 for h in headers[:]:
   o_file.write("%s,"% h)
 o_file.write('\n')
@@ -122,59 +163,40 @@ for row in csvreader:
   server_power = float(row[header_index['server_power']])
   life_time_tco = float(row[header_index['life_time_tco']])
 
-  routings = generate_routings(model, chiplet_size)
+  opt_thru_results, opt_delay_results = opt_routings(model, chiplet_size, TOPS, link_GBs)
+  [opt_thru, opt_thru_delay, opt_thru_routing] = opt_thru_results
+  [opt_delay, opt_delay_thru, opt_delay_routing] = opt_delay_results
 
-  best_thru = 0
-  best_thru_lat = 1e12
-  best_thru_routing = None
-  best_lat_thru = 0
-  best_lat = 1e12
-  best_lat_routing = None
-  for routing in routings:
-    new_th, new_delay, bottleneck = analysis(model, routing, link_GBs, TOPS)
-    if new_th > best_thru:
-      best_thru = new_th
-      best_thru_lat = new_delay
-      best_thru_routing = routing
-    elif new_th == best_thru:
-      if new_delay < best_thru_lat:
-        best_thru_lat = new_delay
-        best_thru_routing = routing
   
-    if new_delay < best_lat:
-      best_lat = new_delay
-      best_lat_thru = new_th
-      best_lat_routing = routing
-    elif new_delay == best_lat:
-      if new_th < best_lat_thru:
-        best_lat_thru = new_th
-        best_lat_routing = routing
-  
-  #  new_row.append(best_thru_routing)
-  new_row.append(math.floor(best_thru))
-  new_row.append(best_thru_lat/1000)
-  new_row.append(server_power/math.floor(best_thru)*1000)
-  new_row.append(server_cost/math.floor(best_thru)*1000)
-  tco_per_thru = life_time_tco/math.floor(best_thru)*1000
+  new_row.append(math.floor(opt_thru))
+  new_row.append(opt_thru_delay/1000)
+  #  new_row.append(opt_thru_routing)
+  new_row.append(server_power/math.floor(opt_thru)*1000)
+  new_row.append(server_cost/math.floor(opt_thru)*1000)
+  tco_per_thru = life_time_tco/math.floor(opt_thru)*1000
   new_row.append(tco_per_thru)
-  new_row.append(server_power * best_thru_lat/1000000)
-  new_row.append(server_cost * best_thru_lat/1000000)
-  tco_delay = life_time_tco * best_thru_lat/1000000
+
+  new_row.append(opt_delay/1000)
+  new_row.append(math.floor(opt_delay_thru))
+  #  new_row.append(opt_delay_routing)
+  new_row.append(server_power * opt_delay/1000000)
+  new_row.append(server_cost * opt_delay/1000000)
+  tco_delay = life_time_tco * opt_delay/1000000
   new_row.append(tco_delay)
   for r in new_row:
     o_file.write("%s,"% r)
   o_file.write('\n')
 
-  if tco_per_thru < best_tco_per_thru:
-    best_tco_per_thru_design= [chiplet_size, TOPS, best_thru_routing]
-    best_tco_per_thru = tco_per_thru
-  if tco_delay < best_tco_delay:
-    best_tco_delay_design = [chiplet_size, TOPS, best_thru_routing]
-    best_tco_delay = tco_delay
+  # if tco_per_thru < best_tco_per_thru:
+  #   best_tco_per_thru_design= [chiplet_size, TOPS, best_thru_routing]
+  #   best_tco_per_thru = tco_per_thru
+  # if tco_delay < best_tco_delay:
+  #   best_tco_delay_design = [chiplet_size, TOPS, best_thru_routing]
+  #   best_tco_delay = tco_delay
 
   #  print('========',chiplet_size,'MB  ', TOPS, 'TOPS  =========')
   #  print(int(best_thru), int(best_thru_lat)/1000)
 o_file.close()
 
-print(best_tco_per_thru_design)
-print(best_tco_delay_design)
+#  print(best_tco_per_thru_design)
+#  print(best_tco_delay_design)

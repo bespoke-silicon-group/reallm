@@ -129,7 +129,8 @@ def fprintData(data_list, o_file, simple_csv=False):
 # Modify the CSV parsing accordinly if these two fprint functions change.
 #
 def csv2df(csvfile):
-  df = pd.DataFrame.from_csv(csvfile, index_col=False, parse_dates=False)
+  #  df = pd.DataFrame.from_csv(csvfile, index_col=False, parse_dates=False)
+  df = pd.read_csv(csvfile)
   # drop the useless column caused by a comma at the end of each row, 
   # according to fprintHeader() fprintData() 
   df.drop(df.columns[-1], axis=1, inplace=True) 

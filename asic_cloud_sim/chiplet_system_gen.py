@@ -16,9 +16,9 @@ if __name__ == '__main__':
   # MB memory per chiplet
   MEM_per_chiplet = np.arange(40.0, 340.0, 20.0)
 
-  IO_bandwidth = 12.5 # GB/s
+  IO_bandwidth = 50.0 # GB/s
 
-  keep_large_power = False
+  keep_large_power = True
   use_total_power = True
 
   start_time = time.time()
