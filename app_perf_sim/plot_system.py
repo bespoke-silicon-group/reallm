@@ -1,56 +1,97 @@
-import pandas as pd
 import graphviz
-from gpt_analysis import model, opt_routings, analysis
+import csv
+import re
+import math
 
-csvfile = 'routing_opt_results.csv'
-df = pd.read_csv(csvfile)
-df.drop(df.columns[-1], axis=1, inplace=True)
-df.columns = df.columns.str.replace('.*\]', '')
-
-valid_df = df[df['asic_hot']==0.0]
-valid_df = valid_df[valid_df['server_hot']==0.0]
-
-opt_thru_design = valid_df[valid_df.opt_thru == valid_df.opt_thru.max()]
-opt_delay_design = valid_df[valid_df.opt_delay == valid_df.opt_delay.min()]
-tco_opt_delay_design = valid_df[valid_df.tco_opt_delay == valid_df.tco_opt_delay.min()]
-tco_per_opt_thru_design = valid_df[valid_df.tco_per_opt_thru == valid_df.tco_per_opt_thru.min()]
-
-
-def analyze_optmial_system(design, target):
-  design = design[design.life_time_tco == design.life_time_tco.min()]
-  sram = design.iloc[0]['sram_per_asic']
-  tops = design.iloc[0]['tops_per_asic']
-  link_GBs = design.iloc[0]['io_bw']
-
-  area = design.iloc[0]['die_area']
-  asic_power = design.iloc[0]['watts_per_asic']
-  num_chiplets = design.iloc[0]['asics_per_server']
-  server_power = design.iloc[0]['server_power']
-  tco = design.iloc[0]['life_time_tco']
-
-  [opt_thru, opt_thru_delay, opt_thru_routing], [opt_delay, opt_delay_thru, opt_delay_routing] = opt_routings(model, sram, tops, link_GBs)
+def plot_routing(routing, output):
+  layer_routing = re.findall(r"\[(.*?)\]", routing)
   
-  if target == 'thru':
-    routing =  opt_thru_routing
-  elif target == 'delay':
-    routing = opt_delay_routing
-  else:
-    print('Target Error')
-    return None
-
-  analysis(model, routing, link_GBs, tops, True)
-
-  return sram, tops, area, asic_power, num_chiplets, server_power, tco, routing
+  Q_r = layer_routing[0]
+  K_r = layer_routing[1]
+  V_r = layer_routing[2]
+  A_r = layer_routing[3]
+  FC1_r = layer_routing[4]
+  FC2_r = layer_routing[5]
   
+  real_routing = {'Q':[None,None], 'K':[None,None], 'V':[None,None], 'FC0':[None,None], 'FC1':[None,None], 'FC2':[None,None]}
+  
+  real_routing['Q'][0] = int(Q_r.split(',')[0])
+  real_routing['Q'][1] = int(Q_r.split(',')[1])
+  real_routing['K'][0] = int(Q_r.split(',')[0])
+  real_routing['K'][1] = int(Q_r.split(',')[1])
+  real_routing['V'][0] = int(Q_r.split(',')[0])
+  real_routing['V'][1] = int(Q_r.split(',')[1])
+  real_routing['FC0'][0] = int(A_r.split(',')[0])
+  real_routing['FC0'][1] = int(A_r.split(',')[1])
+  real_routing['FC1'][0] = int(FC1_r.split(',')[0])
+  real_routing['FC1'][1] = int(FC1_r.split(',')[1])
+  real_routing['FC2'][0] = int(FC2_r.split(',')[0])
+  real_routing['FC2'][1] = int(FC2_r.split(',')[1])
+  
+  G = graphviz.Digraph(output+'_system', comment=output)
+  
+  pre_out_nodes = []
+  for node_type in ['Q', 'K', 'V', 'FC0', 'FC1', 'FC2']:
+  #  for node_type in ['Q', 'K', 'V', 'FC0', 'FC1']:
+    C = real_routing[node_type][0]
+    M = real_routing[node_type][1]
+    num_nodes = C*M
+    for i in range(num_nodes):
+      G.node(node_type+str(i), label=node_type, shape='square')
+    for i in range(M):
+      for j in range(C-1):
+        G.edge(node_type+str(i*C+j), node_type+str(i*C+j+1))
+    
+    if node_type in ['Q', 'K', 'V']:
+      for i in range(M):
+        pre_out_nodes.append(node_type+str((i+1)*C-1))
+    else:
+      for i in range(M):
+        if len(pre_out_nodes) >= C:
+          Nout_to_1in = math.ceil(len(pre_out_nodes)/C)
+          for j in range(C):
+            in_node = node_type+str(i*C+j)
+            for k in range(Nout_to_1in):
+              out_node = pre_out_nodes[math.floor(j*(len(pre_out_nodes)/C))+k]
+              G.edge(out_node, in_node)
+        if len(pre_out_nodes) < C:
+          out_to_Nin = math.ceil(C/len(pre_out_nodes))
+          for j in range(len(pre_out_nodes)):
+            out_node = pre_out_nodes[j]
+            for k in range(out_to_Nin):
+              in_node_index = math.floor(j*C/len(pre_out_nodes))+k
+              in_node = node_type+str(in_node_index)
+              G.edge(out_node, in_node)
+      pre_out_nodes = []
+      for i in range(M):
+        pre_out_nodes.append(node_type+str((i+1)*C-1))
+  
+  
+  G.render(directory='./').replace('\\', '/')
 
-print(analyze_optmial_system(opt_thru_design, 'thru'))
-print('========================================')
-print(analyze_optmial_system(opt_delay_design, 'delay'))
-print('========================================')
-print(analyze_optmial_system(tco_per_opt_thru_design, 'thru'))
-print('========================================')
-print(analyze_optmial_system(tco_opt_delay_design, 'delay'))
-print('========================================')
+
+f = open('best_systems.csv')
+csvreader = csv.reader(f)
+
+headers = next(csvreader)
+
+for row in csvreader:
+  opt_target = row[0]
+  link_GBs = row[1]
+  sram = row[2]
+  tops = row[3]
+  area = row[4]
+  asic_power = row[5]
+  num_chiplets = row[6]
+  server_power = row[7]
+  tco = row[8]
+  routing = row[9]
+
+  # print(opt_target, sram, tops, routing)
+  plot_routing(routing, opt_target)
+
+f.close()
+
 
 # digraph G {
 #     #splines=ortho

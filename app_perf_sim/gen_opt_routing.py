@@ -198,5 +198,3 @@ for row in csvreader:
   #  print(int(best_thru), int(best_thru_lat)/1000)
 o_file.close()
 
-#  print(best_tco_per_thru_design)
-#  print(best_tco_delay_design)

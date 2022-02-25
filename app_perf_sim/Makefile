@@ -6,15 +6,19 @@ IMAGE_FORMAT ?= pdf
 export IMAGE_FORMAT
 
 gen:
-	python gpt_analysis.py
+	python gen_opt_routing.py
 
-pareto:
+best:
+	python best_system.py
+
+plot_pareto:
 	$(PYTHON) plot_pareto.py
 
-sys:
+plot_system:
 	python plot_system.py
 
 clean:
 	-rm -f *.csv
 	-rm -f *.pdf
+	-rm -f *.gv
 
