@@ -4,8 +4,10 @@ import csv
 def generate_routings(model, chiplet_size):
   # possible_routings = {'layer name': [[n_C, n_M], ]}
   possible_routings = {'Q':[], 'Atten_FC':[], 'FC1':[], 'FC2':[]}
+  layers_size = {'Q': 320, 'Atten_FC': 320, 'FC1': 1280, 'FC2': 1280}
   for layer in ['Q', 'Atten_FC', 'FC1', 'FC2']:
-    layer_size = model[layer][0]*model[layer][1]*2 /1e6 # in MBytes
+    #  layer_size = model[layer][0]*model[layer][1]*2 /1e6 # in MBytes
+    layer_size = layers_size[layer]
     num_chiplets = int(math.ceil(layer_size/chiplet_size))
     for i in range(1,num_chiplets+1):
       if num_chiplets % i == 0:
