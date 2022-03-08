@@ -1,5 +1,5 @@
 import pandas as pd
-from gen_opt_routing import model, opt_routings, analysis
+from opt_routing import model, opt_routings, analysis
 
 def analyze_optmial_system(design, target):
   design = design[design.life_time_tco == design.life_time_tco.min()]
