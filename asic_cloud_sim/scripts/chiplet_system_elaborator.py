@@ -43,7 +43,7 @@ def chiplet_elaborator(design):
   #  chiplets_per_stage = math.ceil(mem_per_stage / mem_size)
   #  chiplets_per_board = chiplets_per_stage * stage_per_board
   if mem_per_board[0] < mem_size: # BERT or GPT2 or some T-NLG
-    stages_per_chiplet = math.ceil(mem_size / mem_per_board[0])
+    stages_per_chiplet = math.floor(mem_size / mem_per_board[0])
     chiplets_per_board = math.ceil(len(mem_per_board) / stages_per_chiplet)
   else:
     chiplets_per_board = 0

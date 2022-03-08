@@ -5,12 +5,12 @@ import matplotlib.pyplot as plt
 # Plot lim
 # Name       thru_opt             delay_opt            tco_per_thru       tco_delay
 #            x           y        x           y        x         y        x          y
-# BERT                   (0,6)                (0,6)    (47,52)   (50,200) (0.08,0.5) (0,2)
-# GPT2       (150k,300k) (0,0.4)  (150k,300k) (0,0.4)  (4.5,4.8) (7,15)   (0.04,0.2) (0,0.5)
-# T-NLG      (150k,250k) (0,0.5)  (150k,250k) (0,0.5)  (5.3,5.7) (8,20)   (0.1,0.7)  (0,4)
+# BERT                   (0.2,2)              (0.2,2)  (47,52)   (50,200) (0.08,0.5) (0,2)
+# GPT2                   (0,0.4)              (0,0.4)  (4.5,4.8) (7,15)   (0.04,0.2) (0,0.5)
+# T-NLG      (180k,240k) (0,0.5)  (180k,240k) (0,0.5)  (5.3,5.7) (8,20)   (0.1,0.7)  (0,4)
 # MT-NLG-A   (180k,240k) (0,0.02) (180k,240k) (0,0.02) (5.1,5.7) (9,18)   (0.9,0.02) (0.02,0.03)
 
-csvfile = 'MT-NLG-Atten_7nm_routing_opt_results.csv'
+csvfile = 'BERT_7nm_routing_opt_results.csv'
 df = utils.csv2df(csvfile)
 
 valid_df = df[df['asic_hot']==0.0]
@@ -48,7 +48,7 @@ if draw_hot:
       ax = dfplot.line(dataframe, x='opt_delay_thru', y='opt_delay', key=key, sort_key=True, keyloc='upper right', xlabel='Throughput', ylabel='Latency (ms)', linestyle='',markersize=markersize, ax=ax, color='red')
 ax.get_legend().remove()
 #  ax.set_xlim(180e3, 240e3)
-#  ax.set_ylim(0.01, 0.02)
+#  ax.set_ylim(0.2, 2)
 
 if annotate:
   for idx, row in df.iterrows():
