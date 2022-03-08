@@ -42,9 +42,13 @@ def chiplet_elaborator(design):
   # calculate # of chiplets per board
   #  chiplets_per_stage = math.ceil(mem_per_stage / mem_size)
   #  chiplets_per_board = chiplets_per_stage * stage_per_board
-  chiplets_per_board = 0
-  for mem_per_stage in mem_per_board:
-    chiplets_per_board += math.ceil(mem_per_stage / mem_size)
+  if mem_per_board[0] < mem_size: # BERT or GPT2 or some T-NLG
+    stages_per_chiplet = math.ceil(mem_size / mem_per_board[0])
+    chiplets_per_board = math.ceil(len(mem_per_board) / stages_per_chiplet)
+  else:
+    chiplets_per_board = 0
+    for mem_per_stage in mem_per_board:
+      chiplets_per_board += math.ceil(mem_per_stage / mem_size)
   chiplets_per_lane = math.ceil(math.sqrt(chiplets_per_board))
 
   # Calculate power and performance based on provisioning
@@ -73,7 +77,7 @@ def chiplet_elaborator(design):
       if keep_large_power:
         asic_spec['asic_hot'] = 1.0
       else:
-        print 'TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(', (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power
+        # print 'TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(', (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power
         return
     else:
       asic_spec['asic_hot'] = 0.0
@@ -103,7 +107,7 @@ def chiplet_elaborator(design):
     if keep_large_power:
       srv_spec['server_hot'] = 1.0
     else:
-      print 'Board power limit exceeded!! In tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', has total board chip power of ', srv_spec['server_chip_power'], 'and the max power is 1000'
+      #  print 'Board power limit exceeded!! In tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', has total board chip power of ', srv_spec['server_chip_power'], 'and the max power is 1000'
       return
   else:
     srv_spec['server_hot'] = 0.0

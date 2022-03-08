@@ -182,15 +182,27 @@ board_max_power = 1000.0
 # ---------------------------------------------------------------------------- #
 # Applications
 # ---------------------------------------------------------------------------- #
+# Name   Mem/Stage(MB) Mem/Layer(MB) Layers Stages/Board Mem/Board(MB) Boards
+# BERT   8             25            24     72           600           1
+# GPT2   20            60            48     144          3024          1
+# T-NLG  150           450           78     24           3600          10
+# GPT3   1280          3840          96     3            3840          96
+# MT-NLG 3400          10200         105    1            3400          315
 # Memory needed for each stage, in MB
 mem_per_stage = {'GPT3': 3840/3}
 # Stage per board
 stage_per_board = {'GPT3': 3}
 # Memory needed for each board
-mem_per_board = {'GPT3': [320, 320, 320, 320, 1280, 1280]}
+mem_per_board = {'BERT': [25]*24,
+                 #  'GPT2': [378, 378, 378, 378, 378, 378, 378, 378],
+                 'GPT2': [20]*144,
+                 'T-NLG': [150]*24,
+                 'GPT3': [320, 320, 320, 320, 1280, 1280],
+                 'MT-NLG-Atten': [850, 850, 850, 850],
+                 'MT-NLG-FC': [3400]
+                 }
 # Boards needed
-num_boards = {'GPT3': 97}
-
+num_boards = {'BERT': 1, 'GPT2': 1, 'T-NLG': 10, 'GPT3': 96, 'MT-NLG-Atten': 105, 'MT-NLG-FC':210}
 
 
 if __name__ == '__main__':

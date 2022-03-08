@@ -5,7 +5,7 @@ export PYTHONPATH := ${PYTHONPATH}:$(SCRIPTS_PATH)
 IMAGE_FORMAT ?= pdf
 export IMAGE_FORMAT
 
-all: gen opt
+all: gen
 
 gen:
 	$(PYTHON) chiplet_system_gen.py
