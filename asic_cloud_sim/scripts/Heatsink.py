@@ -96,14 +96,14 @@ def findBestThickAndN(hs_tmpl, asics_per_col, full_lane_hs=True):
 # find best HS for die
 def findHS(hs_tmpl, asics_per_col, max_length):
    if hs_tmpl['die_width'] > hs_tmpl['base_width']:
-      print 'ERROR, Die width is larger than Heat Sink width'
+      print('ERROR, Die width is larger than Heat Sink width')
       return None
    
    # Find the best result by considering single heatsink covering the lane 
    hs_spec = hs_tmpl.copy()
    hs_spec['base_length'] = max_length
    best_result = findBestThickAndN(hs_spec, asics_per_col, False)
-   #print "best:", best_result['q_asic'], best_result['base_length']
+   #print("best:", best_result['q_asic'], best_result['base_length'])
 
    # Find the 95% of the best or shorter one
    base_length = math.ceil(hs_tmpl['die_length'] / CONSTANTS.BaseLengthPrecision) * CONSTANTS.BaseLengthPrecision
@@ -127,7 +127,7 @@ def findHS(hs_tmpl, asics_per_col, max_length):
                break
 
       base_length += CONSTANTS.BaseLengthPrecision
-   #print "results:", hs_to_use['q_asic'],hs_to_use['base_length'], hs_to_use['base_length']*asics_per_col
+   #print("results:", hs_to_use['q_asic'],hs_to_use['base_length'], hs_to_use['base_length']*asics_per_col)
    return hs_to_use
 # end of findHSToUseFast
 
@@ -138,7 +138,7 @@ def evalHS(die_area, asics_per_col):
   hs_spec['die_width']  = (die_area**0.5) * 1e-3
   hs_spec = findHS(hs_spec, asics_per_col, CONSTANTS.total_length)
   if hs_spec is None:
-    print 'No Heatsink can be found for diea area of',die_area,'asics_per_col of', asics_per_col
+    print('No Heatsink can be found for diea area of',die_area,'asics_per_col of', asics_per_col)
     return (0,0)
   else:
     hs_cost = CONSTANTS.evalHeatSinkCost(hs_spec)

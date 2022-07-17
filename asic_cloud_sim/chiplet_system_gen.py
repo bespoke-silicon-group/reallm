@@ -1,47 +1,34 @@
-import time
-import multiprocessing
 import utils
-import numpy as np
+import argparse
+from chiplet_elaborator import chiplet_elaborator
+from chiplet_system_config import set_config
 
-from chiplet_system_elaborator import chiplet_elaborator
+def run(config):
+  app, tech, use_dram, keep_large_power, use_total_power, srv_mem, IO_bandwidth,               srv_tops_options, srv_chiplets_options, TPU, SI, organic_sub = set_config(config)
+
+  all_data = []
+  for srv_tops in srv_tops_options:
+    for num_chiplets in srv_chiplets_options:
+      design = [app, tech, srv_mem, srv_tops, num_chiplets,
+                IO_bandwidth, keep_large_power, use_total_power,
+                use_dram, TPU, SI, organic_sub]
+      results = chiplet_elaborator(design)
+      if results != None:
+        all_data.append(list(results))
+
+  o_file = open(config+'.csv', 'w')
+  utils.fprintHeader(o_file)
+
+  for data in all_data:
+    utils.fprintData(data, o_file)
+
+  o_file.close()
 
 if __name__ == '__main__':
-  number_of_cores = multiprocessing.cpu_count()
-  #print "Number of cores %d" % (number_of_cores)
-  p = multiprocessing.Pool(number_of_cores)
-  
-  apps = ['BERT', 'GPT2', 'T-NLG', 'GPT3', 'MT-NLG-Atten', 'MT-NLG-FC']
-
-  techs = ['7nm']
-  # MB memory per chiplet
-  MEM_per_chiplet = np.arange(40.0, 330.0, 10.0)
-
-  IO_bandwidth = 50.0 # GB/s
-
-  keep_large_power = False
-  use_total_power = True
-
-  start_time = time.time()
-  for app in apps:
-    for tech in techs:
-      print 'Chiplet system generation for', app, 'at', tech
-      designs = []
-      for MEM in MEM_per_chiplet:
-        # BF16 tera ops per second per chiplet
-        TOPS_per_chiplet = np.arange(0.01*MEM, 0.5*MEM, 0.02*MEM, dtype=float)
-        for TOPS in TOPS_per_chiplet:
-          designs.append([app, tech, TOPS, MEM, IO_bandwidth, keep_large_power, use_total_power])
-        
-      results = p.map(chiplet_elaborator, designs)
-      o_file = open(app+'_'+tech+'_results'+'.csv', 'w')
-      utils.fprintHeader(o_file, True)
-      for result in results:
-       if result is not None:
-         o_file.write("%s" % result)
-      o_file.close()
-  
-  p.close()
-  p.join()
- 
-  print ('#Run time is %s seconds' % (time.time() - start_time))
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--config', type=str, default='exploration')
+  args = parser.parse_args()
+  config = args.config
+  run(config)
+  print('write results of', config)
 

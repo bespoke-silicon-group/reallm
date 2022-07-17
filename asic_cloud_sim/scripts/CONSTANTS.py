@@ -1,6 +1,5 @@
 import sys
 import pandas as pd
-from HTMLTable import df2html
 
 MaxDieTemp = 90.0
 Ambient = 30.0
@@ -10,7 +9,7 @@ BaseLengthPrecision = 1e-3
 BaseThickPrecision = 1e-3
 HSMaxHeight = 35e-3
 
-lanes_per_server = 8
+lanes_per_server = 6
 columns_per_lane = 1
 total_length = 450.0 * 1e-3
 
@@ -23,6 +22,15 @@ VddPrecision = -3
 AirVolumePrecision = 0.1
 
 ################################################################################
+# Package-Level Integration
+################################################################################
+SIWaferCost = 1937.0
+SIMaxSize = 900.0
+SID0 = 0.0005
+BondCost = 1.0
+BondYield = 0.99
+
+################################################################################
 # Server Cost
 ################################################################################
 WaferCost = 12000.0
@@ -30,7 +38,7 @@ PCBCost = 50.0            # $/each (parts not included)x2 if there is DRAM
 PCBPartsCost = 50.0       # (w/o DCDC, michael's sheet)
 DCDCCostPerAmp = 0.33     # $/amp
 DCDCMaxCurrent = 30.0     # Amps
-DCDCEfficiency = 0.9      # 15% loss
+DCDCEfficiency = 0.95     # 5% loss
 FanPower = 7.4            # W/each
 FanCost = 15.0
 APPPower = 10.0           # W (Application Processor + DRAM)
@@ -38,7 +46,7 @@ APPCost = 10.0            # $ (Application Processor + DRAM)
 
 # PSU
 PSUCostPerW = 0.13        # $/W
-PSUEfficiency = 0.9       # 10% loss
+PSUEfficiency = 0.95      # 5% loss
 PSUOutputVoltage = 12.0
 
 # Chassis
@@ -104,10 +112,11 @@ SrvAvgPwr = 1.0            # Server Average Power Relative to Peak,,
 # According to ITRS 2012, a 6T SRAM cell in 90nm is 1 um2, and so the transistor size is 1/6 um2.
 # We scale this area to other tech nodes using S^2 factor.
 
-TechNodes  = ['7nm', '10nm', '16nm', '22nm', '28nm', '40nm', '65nm', '90nm', '130nm', '180nm', '250nm']
+TechNodes  = ['5nm', '7nm', '10nm', '16nm', '22nm', '28nm', '40nm', '65nm', '90nm', '130nm', '180nm', '250nm']
 TechParams =               ['FeatureSize', 'Vth', 'CoreVdd', 'TrSize', 'WaferDiameter', 'CPP']
 TechUnits  =               [         'nm',   'V',       'V',    'um2',             'm', 'nm']
-TechData   = pd.DataFrame([[          7.0,  0.35,      0.75,    0.004,          300e-3,    57.0],  #   7nm
+TechData   = pd.DataFrame([[          5.0,  0.35,      0.75,    0.004,          300e-3,    57.0],  #   5nm
+                           [          7.0,  0.35,      0.75,    0.004,          300e-3,    57.0],  #   7nm
                            [         10.0,  0.35,      0.75,    0.005,          300e-3,    64.0],  #  10nm
                            [         16.0,  0.40,      0.80,    0.005,          300e-3,    90.0],  #  16nm
                            [         22.0,  0.35,      0.80,    0.015,          300e-3,   108.0],  #  22nm
@@ -120,12 +129,14 @@ TechData   = pd.DataFrame([[          7.0,  0.35,      0.75,    0.004,          
                            [        250.0,  0.53,      2.50,    1.289,          200e-3,   640.0]], # 250nm
                            index = TechNodes, columns = TechParams)
 
+FMWC = {'7nm': 9346.0, '65nm': 1937.0}
+
 # ---------------------------------------------------------------------------- #
 # Yield 
 # ---------------------------------------------------------------------------- #
 
 alphas = {'5nm': 25.0
-        , '7nm': 25.0 # ????
+        , '7nm': 26.0 # ????
         , '10nm': 24.06209 # ????
         , '16nm': 22.06209
         , '22nm' : 18.56382 # ????
@@ -145,7 +156,8 @@ D0s = {'5nm'  : 0.001 # ????
      , '22nm'  : 0.002806611 # ????
      , '28nm'  : 0.002206611
      , '40nm'   : 0.001611654
-     , '65nm'  : 0.001519241
+     # , '65nm'  : 0.001519241
+     , '65nm'  : 0.0005 # For SI
      , '90nm'   : 0.001274998
      , '130nm'  : 0.001355531
      , '180nm'  : 0.001270288
@@ -158,6 +170,11 @@ D0s = {'5nm'  : 0.001 # ????
 # ML Chips
 # ---------------------------------------------------------------------------- #
 
+# hbm density (mm2) and price ($) per 4-stack die, 8GB
+hbm_die_cap = 8.0
+real_hbm_size = 92.0
+real_hbm_price = 150.0 * (hbm_die_cap / 8.0)
+
 # SRAM density mm2/MB, data from real implementations
 real_sram_size = {'16nm': 1.28, '7nm': 0.45, '5nm': 0.35}
 # MACs density mm2/Tera BF16 ops, data from real implementations
@@ -166,18 +183,26 @@ real_macs_size = {'7nm': 0.29, '5nm': 0.22}
 real_io_size = {'16nm': 0.3, '7nm': 0.3, '5nm': 0.3}
 
 # Total Power Model, W/Tera BF16 ops
-real_total_power = {'7nm': 1.2, '5nm': 1.0}
+real_total_power = {'7nm': 1.3, '5nm': 1.1}
+real_dram_total_power = {'7nm': 1.6}
 
 # Seprate Power Model
-# MACs dynamic power W/Tera BF16 ops, fake data
-real_macs_power = {'7nm': 0.8, '5nm': 0.6}
-# SRAM dynamic power W/MB, fake data
-real_sram_power = {'7nm': 0.0, '5nm': 0.0}
+# MACs dynamic power W/Tera BF16 ops
+real_macs_power = {'7nm': 0.16, '5nm': 0.12}
+# REG read modify write dynamic power W/TOPS,
+real_reg_power = {'7nm': 0.4, '5nm': 0.3}
+# SRAM dynamic power W/TOPS,
+real_sram_power = {'7nm': 1.75, '5nm': 1.2}
+# DRAM dynamic power W/TOPS,
+real_hbm_power = 40.0
+
 # IOs power W/count, each one is 12.5GB/s, 7 and 5nm is fake
-real_io_power = {'16nm': 0.175, '7nm': 0.175, '5nm': 0.175}
+real_io_power = {'16nm': 0.175, '7nm': 0.125, '5nm': 0.11}
+
+others_power = {'7nm': 1.0, '5nm': 0.7}
 
 # Board Max Power
-board_max_power = 1000.0
+board_max_power = 2000.0
 
 # ---------------------------------------------------------------------------- #
 # Applications
@@ -204,13 +229,3 @@ mem_per_board = {'BERT': [25]*24,
 # Boards needed
 num_boards = {'BERT': 1, 'GPT2': 1, 'T-NLG': 10, 'GPT3': 96, 'MT-NLG-Atten': 105, 'MT-NLG-FC':210}
 
-
-if __name__ == '__main__':
-  TechData.columns = map(lambda val, unit: val+' ('+unit+')', TechParams, TechUnits) # for display only
-  pd.set_option('display.width', 1000) # characters
-  pd.options.display.float_format = '{:0,.2f}'.format # 1,234.56
-
-  print TechData
-  df2html(TechData, 'Technology', 'Regular', '<b>Technology Constants</b>')
-
-  TechData.columns = TechParams # revert column names

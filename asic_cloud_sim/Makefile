@@ -1,20 +1,21 @@
-export PYTHON = ~/miniconda3/envs/py2/bin/python
 export SCRIPTS_PATH = $(abspath ./scripts)
 export PYTHONPATH := ${PYTHONPATH}:$(SCRIPTS_PATH)
 
 IMAGE_FORMAT ?= pdf
 export IMAGE_FORMAT
 
-all: gen
+CONFIG = 'HBM'
+
+all: gen opt plot
 
 gen:
-	$(PYTHON) chiplet_system_gen.py
+	python chiplet_system_gen.py --config $(CONFIG)
 
 opt:
-	$(PYTHON) chiplet_system_opt.py
+	python chiplet_system_opt.py --config $(CONFIG)
 
 plot:
-	$(PYTHON) chiplet_system_plot.py
+	python chiplet_system_plot.py --config $(CONFIG)
 
 clean:
 	-rm -f *.tco

@@ -1,5 +1,4 @@
 import math
-import FabCost
 import CONSTANTS
 from decimal import *
 
@@ -88,14 +87,10 @@ def die_area_calc(asic_spec):
   return die_area+patterning_area
 
 # calculates die cost
-def die_cost_calc(die_area, die_yield, tech, MPW = False):
+def die_cost_calc(die_area, die_yield, tech):
   # calculate silicon and testing cost
-  if (MPW):
-    dpw = FabCost.CostBook[tech]['rpw']
-    die_cost = (FabCost.CostBook[tech]['cpw'] *1.0 / dpw) / die_yield
-  else:
-    dpw = dies_per_wafer(die_area,CONSTANTS.TechData.loc[tech, "WaferDiameter"]*1e3)
-    die_cost = (FabCost.CostBook[tech]['fmwc'] *1.0 / dpw) / die_yield
+  dpw = dies_per_wafer(die_area,CONSTANTS.TechData.loc[tech, "WaferDiameter"]*1e3)
+  die_cost = (CONSTANTS.FMWC[tech] *1.0 / dpw) / die_yield
   # testing cost model of 1% overhead
   testing_cost_per_die = 0.01 * die_cost
   

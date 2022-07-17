@@ -1,292 +1,268 @@
-import math
-import csv
+mapping_default = {
+    't_srv': 1, # total used srvs per pipe stage
+    't_pkg': 1, # total used pkgs per pipe stage
+    't_chip': 1, # total used  chips per pipe stage
+    'p': 1, # p * t_chips = total chips 
+    'partition': {'FC1': 'col','FC2': 'row'},
+}
 
-app_layers_size = {
-    'GPT3': {'Q': 320, 'Atten_FC': 320, 'FC1': 1280, 'FC2': 1280},
-    'MT-NLG-Atten': {'Q': 850, 'Atten_FC': 850},
-    'MT-NLG-FC': 3400
-    }
+def product_of_two(num):
+    pairs = []
+    for i in range(1, num+1):
+        if num % i == 0:
+            pairs.append([i, int(num/i)])
+    return pairs
 
-INPUT_LEN = 50
+########################################
+# Collective Opeartion Timing
+########################################
+def pipeline_collective(p, n, bw, T_start=0.01):
+    T_byte = 1 / bw / 1000 # in us
 
-def generate_routings(app, chiplet_size, chiplets_per_board):
-  if app == 'BERT' or app == 'GPT2' or app == 'T-NLG': # multi-layer per chiplet
-    # possible routing = total chiplets
-    routings = [chiplets_per_board]
-  elif app == 'GPT3':
-    # possible_routings = {'layer name': [[n_C, n_M], ]}
-    possible_routings = {'Q':[], 'Atten_FC':[], 'FC1':[], 'FC2':[]}
-    for layer in ['Q', 'Atten_FC', 'FC1', 'FC2']:
-      layer_size = app_layers_size[app][layer]
-      num_chiplets = int(math.ceil(layer_size/chiplet_size))
-      for i in range(1,num_chiplets+1):
-        if num_chiplets % i == 0:
-          possible_routings[layer].append([i, int(num_chiplets/i)])
+    if p == 1:
+        return 0
+    elif p == 2:
+        T = T_start+n*T_byte
+    else:
+        m = math.ceil(math.sqrt(n*(p-2)*T_byte/T_start))
+        T = (T_start+n/m*T_byte)*(p+m-2)
+
+    return T
+
+def ring_allreduce(p, n, bw, T_start=0.01):
+    T_byte = 1 / bw / 1000 # in us
+
+    if p == 1:
+        return 0
+    else:
+        T = 2*(p-1)*((n/p)*T_byte+T_start)
+    return T
+
+def reduce_scatter(p, n, bw, T_start=0.01):
+    T_byte = 1 / bw / 1000 # in us
+
+    if p == 1:
+        return 0
+    else:
+        T = (p-1)*((n/p)*T_byte+T_start)
+    return T
+
+def allgather(p, n, bw, T_start=0.01):
+    T_byte = 1 / bw / 1000 # in us
+
+    if p == 1:
+        return 0
+    else:
+        T = (p-1)*((n/p)*T_byte+T_start)
+    return T
+
+########################################
+
+def generate_routings(sys_spec, algo_spec):
+
+    num_srvs = sys_spec['num_srvs']
+    pkgs_per_srv = sys_spec['pkgs_per_srv']
+    chips_per_pkg = sys_spec['chips_per_pkg']
+    num_layers = algo_spec['num_layers']
+    num_trans_stages = num_layers * 3
+
+    mappings = []
+
+    # Server level mapping
+    if num_srvs > 1:
+        all_srv_t_p = product_of_two(num_srvs)
+        for srv_t_p in all_srv_t_p:
+            srv_t = srv_t_p[0]
+            srv_p = srv_t_p[1]
+            if srv_p > num_trans_stages:
+                continue
+            if num_trans_stages % srv_p != 0:
+                continue
+            trans_stage_per_pipe_stage = num_trans_stages / srv_p
+            if trans_stage_per_pipe_stage > 1 and trans_stage_per_pipe_stage % 3 != 0:
+                continue
+
+            mapping = mapping_default.copy()
+            mapping['t_srv'] = srv_t
+            mapping['t_pkg'] = srv_t * sys_spec['pkgs_per_srv']
+            mapping['t_chip'] = srv_t * sys_spec['pkgs_per_srv'] * sys_spec['chips_per_pkg']
+            mapping['p'] = srv_p
+
+            mappings.append(mapping)
+#             print('srv', mapping)
+
+    # Package level mapping
+    all_pkg_t_p = product_of_two(pkgs_per_srv)
+    for pkg_t_p in all_pkg_t_p:
+        pkg_t = pkg_t_p[0]
+        pkg_p = pkg_t_p[1]
+        total_p = pkg_p * num_srvs
+        if total_p > num_trans_stages:
+            continue
+        if num_trans_stages % total_p != 0:
+            continue
+        trans_stage_per_pipe_stage = num_trans_stages / total_p
+        if trans_stage_per_pipe_stage > 1 and trans_stage_per_pipe_stage % 3 != 0:
+            continue
+
+        mapping = mapping_default.copy()
+        mapping['p'] = total_p
+        mapping['t_srv'] = num_srvs / total_p
+        if mapping['t_srv'] >= 1.0:
+            continue
+        mapping['t_pkg'] = pkg_t
+        mapping['t_chip'] = pkg_t * sys_spec['chips_per_pkg']
+
+        mappings.append(mapping)
+#         print('pkg', mapping)
+
+    # Chip level mapping
+    if chips_per_pkg > 1:
+        all_chip_t_p = product_of_two(chips_per_pkg)
+        for chip_t_p in all_chip_t_p:
+            chip_t = chip_t_p[0]
+            chip_p = chip_t_p[1]
+            total_p = chip_p * pkgs_per_srv * num_srvs
+            if total_p > num_trans_stages:
+                continue
+            if num_trans_stages % total_p != 0:
+                continue
+            trans_stage_per_pipe_stage = num_trans_stages / total_p
+            if trans_stage_per_pipe_stage > 1 and trans_stage_per_pipe_stage % 3 != 0:
+                continue
+
+            mapping = mapping_default.copy()
+            mapping['p'] = total_p
+            mapping['t_srv'] = num_srvs / total_p
+            mapping['t_pkg'] = (num_srvs * pkgs_per_srv) / total_p
+            if mapping['t_srv'] >= 1.0 or mapping['t_pkg'] >= 1.0:
+                continue
+            mapping['t_chip'] = chip_t
+
+            mappings.append(mapping)
+#             print('chip', mapping)
+
+    return mappings
+
+# Calculate latency
+def get_latency(sys_spec, algo_spec, mapping, verbose=False):
+
+    d = algo_spec['d']
+
+    layers_per_pipe_stage = algo_spec['num_layers'] / mapping['p'] # 0.33 means one transformer stage
+
+    chip_tops = sys_spec['chip_tops']
+    c2c_bw = sys_spec['c2c_bw']
+    p2p_bw = sys_spec['p2p_bw']
+    s2s_bw = sys_spec['s2s_bw']
+    T_start = sys_spec['T_start']
+    hbm_bw = sys_spec['hbm_bw']
+
+    srvs = mapping['t_srv']
+    pkgs = mapping['t_pkg']
+    chips = mapping['t_chip']
+
+    if srvs > 1:
+        # 1. Multi servers
+        link_GBs = s2s_bw
+        stage2stage_delay = d*2/(s2s_bw*1e9) *1e6 + T_start # in us
+    elif srvs == 1:
+        # 2. One server
+        link_GBs = p2p_bw
+        stage2stage_delay = d*2/(s2s_bw*1e9) *1e6 + T_start # in us
+    else:
+        if pkgs > 1:
+            # 3. Multi pkgs
+            link_GBs = p2p_bw
+            stage2stage_delay = d*2/(p2p_bw*1e9) *1e6 + T_start # in us
+        elif pkgs == 1:
+            # 4. One pkgs
+            link_GBs = c2c_bw
+            stage2stage_delay = d*2/(p2p_bw*1e9) *1e6 + T_start # in us
         else:
-          continue
-    routings = []
-    for Q_routing in possible_routings['Q']:
-      for AFC_routing in possible_routings['Atten_FC']:
-        for FC1_routing in possible_routings['FC1']:
-          for FC2_routing in possible_routings['FC2']:
-            new_routing = {'Q':Q_routing, 'K':Q_routing, 'V':Q_routing, 'Atten_FC':AFC_routing, 'FC1':FC1_routing, 'FC2':FC2_routing}
-            routings.append(new_routing)
-  elif app == 'MT-NLG-Atten':
-    possible_routings = {'Q':[], 'Atten_FC':[]}
-    for layer in ['Q', 'Atten_FC']:
-      layer_size = app_layers_size[app][layer]
-      num_chiplets = int(math.ceil(layer_size/chiplet_size))
-      for i in range(1,num_chiplets+1):
-        if num_chiplets % i == 0:
-          possible_routings[layer].append([i, int(num_chiplets/i)])
-        else:
-          continue
-    routings = []
-    for Q_routing in possible_routings['Q']:
-      for AFC_routing in possible_routings['Atten_FC']:
-        new_routing = {'Q':Q_routing, 'K':Q_routing, 'V':Q_routing, 'Atten_FC':AFC_routing}
-        routings.append(new_routing)
-  elif app == 'MT-NLG-FC':
-    routings = []
-    num_chiplets = chiplets_per_board
-    for i in range(1,num_chiplets+1):
-      if num_chiplets % i == 0:
-        routings.append([i, int(num_chiplets/i)])
-      else:
-        continue
-  else:
-    print('Error! Unknown applications!')
-    routings = None
-  
-  return routings
+            # 5. Multi chips
+            link_GBs = c2c_bw
+            stage2stage_delay = d*2/(c2c_bw*1e9) *1e6 + T_start # in us
 
-def analysis(app, routing, link_GBs, chiplet_TOPS, verbose=False):
+    t = chips
 
-  if app == 'BERT':
-    num_boards = 1
-    chiplets_per_board = routing
-    chiplet_time = (INPUT_LEN * 302e6 * 2) / (chiplets_per_board * chiplet_TOPS * 1e12) * 1e6 # in us
-    link_time = (INPUT_LEN * 1024 * 2) / (link_GBs * 1e9) * 1e6 # in us
-    board_delay = chiplets_per_board * (chiplet_time + link_time)
-    if link_time > chiplet_time:
-      bottleneck = link_time
-      constraints = 'link'
+    if hbm_bw == None:
+        compute_time = 4*d*d*2/t/(chip_tops*1e12) * 1e6 # in us
     else:
-      bottleneck = chiplet_time
-      constraints = 'compute'
-    if verbose:
-      print(app, 'num of chiplets', chiplets_per_board, 'chiplet_time is ', chiplet_time, 'link time is', link_time)
-  elif app == 'GPT2':
-    num_boards = 1
-    chiplets_per_board = routing
-    chiplet_time = (1.48e9 * 2) / (chiplets_per_board * chiplet_TOPS * 1e12) * 1e6 # in us
-    link_time = (12800*2) / (link_GBs * 1e9) * 1e6 # in us
-    board_delay = chiplets_per_board * (chiplet_time + link_time)
-    if link_time > chiplet_time:
-      bottleneck = link_time
-      constraints = 'link'
+        compute_time = 4*d*d*2/t/(hbm_bw*1e9) * 1e6 # in us
+
+    if layers_per_pipe_stage >=1:
+        # Atten: atten_compute + all_reduce
+        atten_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+
+        fc1 = mapping['partition']['FC1']
+        fc2 = mapping['partition']['FC2']
+        if fc1 == 'row':
+            if fc2 == 'row':
+                # fc1: fc1_compute + reduce_scatter
+                fc1_delays = [compute_time, reduce_scatter(t, 4*d*2, link_GBs, T_start)]
+                # fc2: fc2_compute + all_reduce
+                fc2_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+            elif fc2 == 'col': # all_reduce
+                # fc1: fc1_compute + reduce_scatter
+                fc1_delays = [compute_time, ring_allreduce(t, 4*d*2, link_GBs, T_start)]
+                # fc2: fc2_compute + all_gather
+                fc2_delays = [compute_time, allgather(t, d*2, link_GBs, T_start)]
+        elif fc1 == 'col':
+            if fc2 == 'row':
+                # fc1: fc1_compute
+                fc1_delays = [compute_time]
+                # fc2: fc2_compute + all_reduce
+                fc2_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+            elif fc2 == 'col':
+                # fc1: fc1_compute + all_gather
+                fc1_delays = [compute_time, allgather(t, 4*d*2, link_GBs, T_start)]
+                # fc2: fc2_compute + all_gather
+                fc2_delays = [compute_time, allgather(t, d*2, link_GBs, T_start)]
+
+            pipe_stage_delay = (sum(atten_delays) + sum(fc1_delays) + sum(fc2_delays)) * layers_per_pipe_stage + stage2stage_delay
+            total_delay = pipe_stage_delay * mapping['p']
+
+            compute_delay = mapping['p'] * compute_time * 3 * layers_per_pipe_stage
+
+            if verbose:
+                print(mapping['p'])
+                print('atten:', atten_delays, 'fc1:', fc1_delays, 'fc2:', fc2_delays, 'layers/pipe:', layers_per_pipe_stage)
+                print(stage2stage_delay)
+                print(pipe_stage_delay, total_delay)
     else:
-      bottleneck = chiplet_time
-      constraints = 'compute'
+        # Atten: atten_compute + reduce
+        atten_delays = [compute_time, pipeline_collective(t, d*2, link_GBs, T_start)]
+        # fc1: bcast with fc1_compute
+        fc1_delays = [compute_time]
+        # fc2: fc2_compute + reduce
+        fc2_delays = [compute_time, pipeline_collective(t, d*2, link_GBs, T_start)]
+
+        layer_delay = sum(atten_delays) + stage2stage_delay + sum(fc1_delays) + 4*stage2stage_delay + sum(fc2_delays) + stage2stage_delay
+        total_delay = algo_spec['num_layers'] * layer_delay
+
+        compute_delay = mapping['p'] * compute_time
+
+        if verbose:
+            print(mapping['p'])
+            print(atten_delays, stage2stage_delay, fc1_delays, 4*stage2stage_delay, fc2_delays, stage2stage_delay)
+            print(layer_delay, total_delay)
+
+    communicate_delay = total_delay - compute_delay
     if verbose:
-      print(app, 'num of chiplets', chiplets_per_board, 'chiplet_time is ', chiplet_time, 'link time is', link_time)
-  elif app == 'T-NLG':
-    num_boards = 10
-    chiplets_per_board = routing
-    chiplet_time = (218e6 * 8 * 2) / (chiplets_per_board * chiplet_TOPS * 1e12) * 1e6 # in us
-    link_time = (17024*2) / (link_GBs * 1e9) * 1e6 # in us
-    board_delay = chiplets_per_board * (chiplet_time + link_time)
-    if link_time > chiplet_time:
-      bottleneck = link_time
-      constraints = 'link'
-    else:
-      bottleneck = chiplet_time
-      constraints = 'compute'
-    if verbose:
-      print(app, 'num of chiplets', chiplets_per_board, 'chiplet_time is ', chiplet_time, 'link time is', link_time)
-  elif app == 'GPT3':
-    num_boards = 96
-    
-    # Now assume Q, K, V have the same routings
-    if routing['K'] != routing['Q'] or routing['V'] != routing['Q']:
-      print('QKV routing error!')
+        print('compute delay:', compute_delay, 'communicate delay:', communicate_delay)
 
-    D = 12288
-    # model = {'layer name': [C, M]}
-    model = {'Q': [D, D], 'K': [D, D], 'V': [D, D], 'Atten_FC': [D, D], 'FC1': [D, 4*D], 'FC2': [4*D, D]} 
-  
-    all_in_traffics    = {}
-    all_mid_traffics   = {}
-    all_compute_stages = {}
-    all_out_chiplets   = {}
-    for layer in ['Q', 'Atten_FC', 'FC1', 'FC2']:
-      n_C = routing[layer][0]
-      n_M = routing[layer][1]
-      in_traffics = model[layer][0]/n_C
-      out_traffics = model[layer][1]/n_M
-      out_chiplets = n_M
-      compute_stages = n_C
-      mid_traffics = out_traffics
-    
-      all_in_traffics[layer] = in_traffics
-      all_mid_traffics[layer] = mid_traffics
-      all_compute_stages[layer] = compute_stages
-      all_out_chiplets[layer] = out_chiplets
-    
-    bottleneck = 0
-    board_delay = 0
-    constraints = None
-    for layer in ['Q', 'Atten_FC', 'FC1', 'FC2']:
-      num_chiplets = routing[layer][0] * routing[layer][1]
-      if layer == 'Q':
-        input_delay = all_in_traffics[layer]*2/(link_GBs*1e9) *1e6 # in us
-      else:
-        input_delay = all_in_traffics[layer]*num_chiplets*2/(pre_out_chiplets*link_GBs*1e9) *1e6 # in us
-    
-      mid_link_delay = all_mid_traffics[layer]*2/(link_GBs*1e9) *1e6 # in us
-      mid_links_delay = (all_compute_stages[layer]-1)*mid_link_delay
-    
-      stage_delay = model[layer][0]*model[layer][1]*2/num_chiplets/(chiplet_TOPS*1e12) * 1e6 # in us
-      compute_delay = all_compute_stages[layer]*stage_delay
-    
-      if input_delay > bottleneck:
-        bottleneck = input_delay
-        constraints = 'link'
-      if mid_link_delay > bottleneck:
-        bottleneck = mid_link_delay
-        constraints = 'link'
-      if stage_delay > bottleneck:
-        bottleneck = stage_delay
-        constraints = 'compute'
-      board_delay += (input_delay+mid_links_delay+compute_delay)
-    
-      pre_out_chiplets = all_out_chiplets[layer]
-    
-      if verbose:
-        print('GPT3 ', layer, 'Layers: ')
-        print(input_delay,  mid_links_delay, compute_delay)
-  elif app == 'MT-NLG-Atten':
-    num_boards = 105
-    # Now assume Q, K, V have the same routings
-    if routing['K'] != routing['Q'] or routing['V'] != routing['Q']:
-      print('QKV routing error!')
+    return total_delay, [compute_delay, communicate_delay]
 
-    D = 20480
-    model = {'Q': [D, D], 'K': [D, D], 'V': [D, D], 'Atten_FC': [D, D]} 
-  
-    all_in_traffics    = {}
-    all_mid_traffics   = {}
-    all_compute_stages = {}
-    all_out_chiplets   = {}
-    for layer in ['Q', 'Atten_FC']:
-      n_C = routing[layer][0]
-      n_M = routing[layer][1]
-      in_traffics = model[layer][0]/n_C
-      out_traffics = model[layer][1]/n_M
-      out_chiplets = n_M
-      compute_stages = n_C
-      mid_traffics = out_traffics
-    
-      all_in_traffics[layer] = in_traffics
-      all_mid_traffics[layer] = mid_traffics
-      all_compute_stages[layer] = compute_stages
-      all_out_chiplets[layer] = out_chiplets
-    
-    bottleneck = 0
-    board_delay = 0
-    constraints = None
-    for layer in ['Q', 'Atten_FC']:
-      num_chiplets = routing[layer][0] * routing[layer][1]
-      if layer == 'Q':
-        input_delay = all_in_traffics[layer]*2/(link_GBs*1e9) *1e6 # in us
-      else:
-        input_delay = all_in_traffics[layer]*num_chiplets*2/(pre_out_chiplets*link_GBs*1e9) *1e6 # in us
-    
-      mid_link_delay = all_mid_traffics[layer]*2/(link_GBs*1e9) *1e6 # in us
-      mid_links_delay = (all_compute_stages[layer]-1)*mid_link_delay
-    
-      stage_delay = model[layer][0]*model[layer][1]*2/num_chiplets/(chiplet_TOPS*1e12) * 1e6 # in us
-      compute_delay = all_compute_stages[layer]*stage_delay
-    
-      if input_delay > bottleneck:
-        bottleneck = input_delay
-        constraints = 'link'
-      if mid_link_delay > bottleneck:
-        bottleneck = mid_link_delay
-        constraints = 'link'
-      if stage_delay > bottleneck:
-        bottleneck = stage_delay
-        constraints = 'compute'
-      board_delay += (input_delay+mid_links_delay+compute_delay)
-    
-      pre_out_chiplets = all_out_chiplets[layer]
-
-  elif app == 'MT-NLG-FC':
-    num_boards = 210
-    D = 20480
-    n_C = routing[0]
-    n_M = routing[1]
-    num_chiplets = n_C * n_M
-    in_traffics = D/n_C
-    out_traffics = 4*D/n_M
-    out_chiplets = n_M
-    compute_stages = n_C
-    mid_traffics = out_traffics
-  
-    input_delay = in_traffics*2/(link_GBs*1e9) *1e6 # in us
-    mid_link_delay = mid_traffics*2/(link_GBs*1e9) *1e6 # in us
-    mid_links_delay = (compute_stages-1)*mid_link_delay
-    stage_delay = D*4*D*2/num_chiplets/(chiplet_TOPS*1e12) * 1e6 # in us
-    compute_delay = compute_stages*stage_delay
-    bottleneck = 0.0
-    if input_delay > bottleneck:
-      bottleneck = input_delay
-      constraints = 'link'
-    if mid_link_delay > bottleneck:
-      bottleneck = mid_link_delay
-      constraints = 'link'
-    if stage_delay > bottleneck:
-      bottleneck = stage_delay
-      constraints = 'compute'
-    board_delay = (input_delay+mid_links_delay+compute_delay)
-  else:
-    print('Error!')
-    
-
-  throughput = 1e6/bottleneck
-  latency = num_boards * board_delay
-  if verbose:
-    print('Throughput is', throughput, 'latency is ', latency, 'bottleneck is', bottleneck, constraints, 'constraints')
-
-  return throughput, board_delay, bottleneck
-
-def opt_routings(app, chiplet_size, TOPS, link_GBs, chiplets_per_board):
-  routings = generate_routings(app, chiplet_size, chiplets_per_board)
-
-  opt_thru = 0
-  opt_thru_delay = 1e12
-  opt_thru_routing = None
-  opt_delay = 1e12
-  opt_delay_thru = 0
-  opt_delay_routing = None
-  for routing in routings:
-    new_thru, new_delay, bottleneck = analysis(app, routing, link_GBs, TOPS, verbose=False)
-    if new_thru > opt_thru:
-      opt_thru = new_thru
-      opt_thru_delay = new_delay
-      opt_thru_routing = routing
-    elif new_thru == opt_thru:
-      if new_delay < opt_thru_delay:
-        opt_thru_delay = new_delay
-        opt_thru_routing = routing
-  
-    if new_delay < opt_delay:
-      opt_delay = new_delay
-      opt_delay_thru = new_thru
-      opt_delay_routing = routing
-    elif new_delay == opt_delay:
-      if new_thru > opt_delay_thru:
-        opt_delay_thru = new_thru
-        opt_delay_routing = routing
-
-  return [opt_thru, opt_thru_delay, opt_thru_routing], [opt_delay, opt_delay_thru, opt_delay_routing]
+def opt_routing(sys, model, verbose=False):
+    all_routings = generate_routings(sys, model)
+    best_latency = 100000000000
+    for routing in all_routings:
+        latency, detail_delay = get_latency(sys, model, routing, verbose)
+        if verbose:
+            print(routing, latency)
+        if latency < best_latency:
+            best_latency = latency
+            best_routing = routing
+            [compute_delay, communicate_delay] = detail_delay
+    return best_routing, best_latency, [compute_delay, communicate_delay]
