@@ -1,5 +1,5 @@
 import CONSTANTS
-from DieCost import die_yield_calc, die_cost_calc, die_area_calc
+from DieCost import die_yield_calc, die_cost_calc, die_area_calc, si_cost_calc
 import TCO
 from Heatsink import evalHS
 import ServerCost

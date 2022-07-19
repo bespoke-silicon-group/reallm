@@ -50,24 +50,41 @@ def gen_pareto_chiplets(csv_name):
       
   return chiplets
 
-def plot(csvfile, label, marker='.'):
-  chiplets = gen_pareto_chiplets(csvfile)
-  d_per_tops = []
-  w_per_tops = []
-  for c in chiplets:
-    d_per_tops.append(c['$_per_tops'])
-    w_per_tops.append(c['w_per_tops'])
+def plot_pareto(chiplet_systems, x_label='w_per_tops', y_label='$_per_tops', draw_tco=None, p1_x=1.5, p2_x=1.55, base=8.7):
+  figure(figsize=(5, 6), dpi=200)
+  plt.rcParams.update({'font.size': 15})
+    
+  markers=['.', '*', '+', '^', '>', '.', '<', '2', 'o', 's', '3' ]
+  for sys in chiplet_systems:
+    config = sys['config']
+    chiplets = sys['chiplets']
+    y = []
+    x = []
+    for c in chiplets:
+      y.append(c[y_label])
+      x.append(c[x_label])
   
-  plt.scatter(w_per_tops, d_per_tops, s=50, label=label, marker=marker)
+    if config == 'exploration':
+      label = 'Chiplet Cloud'
+    elif config == 'SI':
+      label = 'Si Interposer'
+    elif config == 'organic_sub':
+      label = 'Organic Sub'
+    else:
+      label = config
+    plt.scatter(x, y, s=50, label=label, marker=markers.pop(0))
 
   plt.xlabel('W/TOPS', fontsize=15)
   plt.ylabel('$/TOPS', fontsize=15)
   plt.grid(which="major")
 
+  plt.legend(bbox_to_anchor=(1.0, 0.0), loc='lower right', fontsize=10, ncol=1)
+  
+  if draw_tco is not None:
+    tco_line(plt, chiplets, draw_tco, p1_x, p2_x, base)
   return plt
 
-def tco_line(plt, csvfile, tco_tops_list, p1_x=1.5, p2_x=1.55, base=8.7):
-  chiplets = gen_pareto_chiplets(csvfile)
+def tco_line(plt, chiplets, tco_tops_list, p1_x=1.5, p2_x=1.55, base=8.7):
   a = np.array([[float(chiplets[0]['server_power']), float(chiplets[0]['server_cost'])], [float(chiplets[3]['server_power']), float(chiplets[3]['server_cost'])]])
   b = np.array([float(chiplets[0]['tco']), float(chiplets[3]['tco'])])
   x = np.linalg.solve(a, b)
@@ -90,9 +107,9 @@ if __name__ == '__main__':
   args = parser.parse_args()
   config = args.config
 
-  csvfile=config+'.csv'
-  plt = plot(csvfile, label=config, marker='.')
-  plt = tco_line(plt, csvfile, tco_tops_list=[7.95])
+  chiplets = gen_pareto_chiplets(config+'.csv')
+  systems = [{'config': config, 'chiplets':chiplets}]
+  plt = plot_pareto(systems, draw_tco=[7.95])
 
   plt.savefig('pareto.pdf', bbox_inches='tight', pad_inches=0.1)
 

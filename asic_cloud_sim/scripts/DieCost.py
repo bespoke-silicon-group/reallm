@@ -94,6 +94,13 @@ def die_cost_calc(die_area, die_yield, tech):
   # testing cost model of 1% overhead
   testing_cost_per_die = 0.01 * die_cost
   
-  return (die_cost + testing_cost_per_die, dpw) 
+  return (die_cost + testing_cost_per_die, dpw)
+
+def si_cost_calc(si_area, die_cost, num_dies):
+  si_yield = die_yield_calc(si_area, '65nm')
+  (si_cost, sipw) = die_cost_calc(si_area, si_yield, '65nm')
+  total_cost = (si_cost + num_dies * (die_cost + CONSTANTS.BondCost)) / (CONSTANTS.BondYield ** num_dies)
+  extra_cost_per_die = total_cost/num_dies - die_cost
+  return extra_cost_per_die
 
 
