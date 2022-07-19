@@ -1,3 +1,5 @@
+import math
+
 mapping_default = {
     't_srv': 1, # total used srvs per pipe stage
     't_pkg': 1, # total used pkgs per pipe stage

@@ -51,10 +51,8 @@ def gen_pareto_chiplets(csv_name):
   return chiplets
 
 def plot_pareto(chiplet_systems, x_label='w_per_tops', y_label='$_per_tops', draw_tco=None, p1_x=1.5, p2_x=1.55, base=8.7):
-  figure(figsize=(5, 6), dpi=200)
-  plt.rcParams.update({'font.size': 15})
     
-  markers=['.', '*', '+', '^', '>', '.', '<', '2', 'o', 's', '3' ]
+  markers=['*', '.', '+', '^', '>', '.', '<', '2', 'o', 's', '3' ]
   for sys in chiplet_systems:
     config = sys['config']
     chiplets = sys['chiplets']

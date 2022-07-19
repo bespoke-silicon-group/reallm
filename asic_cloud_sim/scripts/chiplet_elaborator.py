@@ -6,7 +6,7 @@ import ServerCost
 import utils
 import math
 
-def chiplet_elaborator(design): 
+def chiplet_elaborator(design, lanes_per_server=6): 
   [app, tech, srv_mem, srv_tops, srv_chiplets, IO_BW, \
    keep_large_power, use_total_power, use_dram, \
    TPU, SI, organic_sub] = design
@@ -79,9 +79,10 @@ def chiplet_elaborator(design):
   asic_spec['joules_per_tops'] = asic_spec['watts_per_asic'] / asic_spec['tops_per_asic']
   
   
-  chiplets_per_lane = math.ceil(srv_chiplets / CONSTANTS.lanes_per_server)
+  chiplets_per_lane = math.ceil(srv_chiplets / lanes_per_server)
   if TPU:
     chiplets_per_lane = 2
+    lanes_per_server = 2
 
   asic_spec['die_cost'] = die_cost
   if SI and chiplets_per_lane > 1:
@@ -124,7 +125,7 @@ def chiplet_elaborator(design):
   asic_spec['watts_per_mm2'] = asic_spec['watts_per_asic'] / asic_spec['die_area']
 
   # Server cost and power calculation
-  srv_spec = ServerCost.evalServerCost(asic_spec, die_cost, hs_cost, chiplets_per_lane, srv_chiplets, srv_tops, TPU)
+  srv_spec = ServerCost.evalServerCost(asic_spec, die_cost, hs_cost, chiplets_per_lane, srv_chiplets, srv_tops, lanes_per_server, TPU)
   
   srv_spec['server_chip_power'] = asic_spec['watts_per_asic']*srv_spec['asics_per_server']
   if srv_spec['server_chip_power'] > CONSTANTS.board_max_power:

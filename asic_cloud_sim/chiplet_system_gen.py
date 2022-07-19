@@ -3,8 +3,8 @@ import argparse
 from chiplet_elaborator import chiplet_elaborator
 from chiplet_system_config import set_config
 
-def run(config, set_app=None, set_tech=None, set_use_dram=None, set_keep_large_power=None, set_use_total_power=None, set_srv_mem=None, set_IO_bandwidth=None, set_srv_tops_options=None, set_srv_chiplets_options=None, set_TPU=None, set_SI=None, set_organic_sub=None):
-  app, tech, use_dram, keep_large_power, use_total_power, srv_mem, IO_bandwidth,               srv_tops_options, srv_chiplets_options, TPU, SI, organic_sub = set_config(config)
+def run(config, set_app=None, set_tech=None, set_use_dram=None, set_keep_large_power=None, set_use_total_power=None, set_srv_mem=None, set_IO_bandwidth=None, set_srv_tops_options=None, set_srv_chiplets_options=None, set_TPU=None, set_SI=None, set_organic_sub=None, set_lanes_per_server=None):
+  app, tech, use_dram, keep_large_power, use_total_power, srv_mem, IO_bandwidth, srv_tops_options, srv_chiplets_options, TPU, SI, organic_sub = set_config(config)
 
   if set_app is not None:
     app = set_app
@@ -30,6 +30,10 @@ def run(config, set_app=None, set_tech=None, set_use_dram=None, set_keep_large_p
     SI = set_SI
   if set_organic_sub is not None:
     organic_sub = set_organic_sub
+  if set_lanes_per_server is not None:
+    lanes_per_server = set_lanes_per_server
+  else:
+    lanes_per_server = 6
 
   all_data = []
   for srv_tops in srv_tops_options:
@@ -37,7 +41,7 @@ def run(config, set_app=None, set_tech=None, set_use_dram=None, set_keep_large_p
       design = [app, tech, srv_mem, srv_tops, num_chiplets,
                 IO_bandwidth, keep_large_power, use_total_power,
                 use_dram, TPU, SI, organic_sub]
-      results = chiplet_elaborator(design)
+      results = chiplet_elaborator(design, lanes_per_server)
       if results != None:
         all_data.append(list(results))
 

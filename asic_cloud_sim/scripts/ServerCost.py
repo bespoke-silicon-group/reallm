@@ -3,7 +3,7 @@ import math
 import CONSTANTS
 
 # Reads logic and sram power as well as their vdd from asic_spec
-def evalServerCost(asic_spec, die_cost, hs_cost, asics_per_col, chiplets_per_board, tops_per_server, TPU = False):
+def evalServerCost(asic_spec, die_cost, hs_cost, asics_per_col, chiplets_per_board, tops_per_server, lanes_per_server, TPU = False):
 
    num_of_asics = chiplets_per_board
    used_lanes = math.ceil(chiplets_per_board / asics_per_col)
@@ -49,7 +49,7 @@ def evalServerCost(asic_spec, die_cost, hs_cost, asics_per_col, chiplets_per_boa
       cost_all_heatsinks = 10.0 * num_of_asics
    else:
       cost_all_heatsinks = hs_cost[0] * num_of_asics
-   cost_all_fans = CONSTANTS.FanCost * CONSTANTS.columns_per_lane * CONSTANTS.lanes_per_server
+   cost_all_fans = CONSTANTS.FanCost * CONSTANTS.columns_per_lane * lanes_per_server
    cost_all_ethernet = 2 * CONSTANTS.EthernetCost
 
    pcb_parts_cost = CONSTANTS.PCBPartsCost
