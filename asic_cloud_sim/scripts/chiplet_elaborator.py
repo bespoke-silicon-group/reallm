@@ -43,7 +43,7 @@ def chiplet_elaborator(design, lanes_per_server=6):
   die_area = die_area_calc(asic_spec)
   if TPU:
     die_area = 380.0
-  if (die_area > 1000.0):
+  if (die_area > CONSTANTS.DieMaxSize):
     print('in tech of',tech,'cannot be fitted', ',', ' die area is:', die_area)
     return
 
@@ -78,7 +78,6 @@ def chiplet_elaborator(design, lanes_per_server=6):
 
   asic_spec['joules_per_tops'] = asic_spec['watts_per_asic'] / asic_spec['tops_per_asic']
   
-  
   chiplets_per_lane = math.ceil(srv_chiplets / lanes_per_server)
   if TPU:
     chiplets_per_lane = 2
@@ -86,15 +85,31 @@ def chiplet_elaborator(design, lanes_per_server=6):
 
   asic_spec['die_cost'] = die_cost
   if SI and chiplets_per_lane > 1:
-    si_total_die_area = chiplets_per_lane * asic_spec['die_area']
-    si_area = si_total_die_area / 0.9
+    for si_num in range(1, int(chiplets_per_lane/2)+1):
+      if chiplets_per_lane % si_num > 0:
+        continue
+      chiplets_per_si = chiplets_per_lane / si_num
+      if chiplets_per_si < 2:
+        continue
+      si_total_die_area = chiplets_per_si * asic_spec['die_area']
+      si_area = si_total_die_area / 0.9
+        
+      if si_area > CONSTANTS.SIMaxSize:
+        continue
+      else:
+        extra_cost_per_die = si_cost_calc(si_area, die_cost, chiplets_per_si)
+        asic_spec['die_si_cost'] = extra_cost_per_die
+        asic_spec['si_num'] = si_num * lanes_per_server
+        break
+       
     if si_area > CONSTANTS.SIMaxSize:
       print('Chiplets area exceed SI size!')
-      print('     ', srv_tops, srv_chiplets, si_area)
-    extra_cost_per_die = si_cost_calc(si_area, die_cost, chiplets_per_lane)
-    asic_spec['die_si_cost'] = extra_cost_per_die
+      print('     ', srv_tops, srv_chiplets)
+      return
+    print('Find SI:', 'num of si:', si_num, 'chips per si:', chiplets_per_si)
   else:
     asic_spec['die_si_cost'] = 0.0
+    asic_spec['si_num'] = 0
   
   
   if False: # No water cooling for now
@@ -117,7 +132,7 @@ def chiplet_elaborator(design, lanes_per_server=6):
       if keep_large_power:
         asic_spec['asic_hot'] = 1.0
       else:
-        # print 'TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(',                        (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power
+        print('TOO HOT!! in tech of', tech, tops,'TOPS, ', mem_size, 'MB', ', die area is', die_area, 'has power of ', asic_spec['watts_per_asic'], '(',                        (asic_spec['watts_per_asic']/die_area), 'W/mm2) and the max power is',max_die_power)
         return
     else:
       asic_spec['asic_hot'] = 0.0

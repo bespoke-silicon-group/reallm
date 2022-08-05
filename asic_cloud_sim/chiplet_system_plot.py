@@ -30,13 +30,13 @@ def gen_pareto_chiplets(csv_name):
   for row in rows:
     sram = float(row[1])
     chiplet = {'tops_per_asic': float(row[2]), 'die_area': float(row[4]), 'watts_per_asic': float(row[5]),
-               'die_cost': float(row[6]), 'asics_per_server': float(row[8]), 'server_power': float(row[9]), 
-               'tops_per_server': float(row[10]), 'server_cost': float(row[11]), 'tco': float(row[13]), 
-               'DCAmortization': float(row[15]), 'DCInterest': float(row[16]), 'DCOpex': float(row[17]), 
-               'SrvAmortization': float(row[18]), 'SrvInterest': float(row[19]), 'SrvOpex': float(row[20]), 
-               'SrvPower': float(row[21]), 'PUEOverhead': float(row[22]),
-               'cost_per_tops': float(row[23]), 'watts_per_tops': float(row[24]), 'tco_per_tops': float(row[25]),
-               'max_die_power_per_server': float(row[26]), 'sram_per_asic': float(row[1])
+               'die_cost': float(row[6]), 'si_num':float(row[8]), 'asics_per_server': float(row[9]), 'server_power': float(row[10]), 
+               'tops_per_server': float(row[11]), 'server_cost': float(row[12]), 'tco': float(row[14]), 
+               'DCAmortization': float(row[16]), 'DCInterest': float(row[17]), 'DCOpex': float(row[18]), 
+               'SrvAmortization': float(row[19]), 'SrvInterest': float(row[20]), 'SrvOpex': float(row[21]), 
+               'SrvPower': float(row[22]), 'PUEOverhead': float(row[23]),
+               'cost_per_tops': float(row[24]), 'watts_per_tops': float(row[25]), 'tco_per_tops': float(row[26]),
+               'max_die_power_per_server': float(row[27]), 'sram_per_asic': float(row[1])
               }
     # if sram in chiplets:
     #     if chiplets[sram]['tops_per_asic'] < chiplet['tops_per_asic']:

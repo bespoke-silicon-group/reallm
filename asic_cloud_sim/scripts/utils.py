@@ -8,7 +8,7 @@
 asic_header = ['tech_node',
                'sram_per_asic', 'tops_per_asic', 'io_bw',
                'die_area', 'watts_per_asic',
-               'die_cost', 'die_si_cost']
+               'die_cost', 'die_si_cost', 'si_num']
 
 srv_header = ['asics_per_server',
               'server_power',

@@ -110,7 +110,7 @@ def generate_routings(sys_spec, algo_spec):
         mapping = mapping_default.copy()
         mapping['p'] = total_p
         mapping['t_srv'] = num_srvs / total_p
-        if mapping['t_srv'] >= 1.0:
+        if mapping['t_srv'] > 1.0:
             continue
         mapping['t_pkg'] = pkg_t
         mapping['t_chip'] = pkg_t * sys_spec['chips_per_pkg']
@@ -259,12 +259,18 @@ def get_latency(sys_spec, algo_spec, mapping, verbose=False):
 def opt_routing(sys, model, verbose=False):
     all_routings = generate_routings(sys, model)
     best_latency = 100000000000
+    
+    all_results = []
     for routing in all_routings:
         latency, detail_delay = get_latency(sys, model, routing, verbose)
         if verbose:
             print(routing, latency)
+            all_results.append([routing, latency, detail_delay])
         if latency < best_latency:
             best_latency = latency
             best_routing = routing
             [compute_delay, communicate_delay] = detail_delay
-    return best_routing, best_latency, [compute_delay, communicate_delay]
+    if verbose:
+        return best_routing, best_latency, [compute_delay, communicate_delay], all_results
+    else:
+        return best_routing, best_latency, [compute_delay, communicate_delay]
