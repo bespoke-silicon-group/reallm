@@ -147,7 +147,7 @@ def generate_routings(sys_spec, algo_spec):
     return mappings
 
 # Calculate latency
-def get_latency(sys_spec, algo_spec, mapping, verbose=False):
+def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False):
 
     d = algo_spec['d']
 
@@ -157,7 +157,10 @@ def get_latency(sys_spec, algo_spec, mapping, verbose=False):
     c2c_bw = sys_spec['c2c_bw']
     p2p_bw = sys_spec['p2p_bw']
     s2s_bw = sys_spec['s2s_bw']
-    T_start = sys_spec['T_start']
+    if ts==None:
+        T_start = sys_spec['T_start']
+    else:
+        T_start = ts
     hbm_bw = sys_spec['hbm_bw']
 
     srvs = mapping['t_srv']
@@ -256,13 +259,13 @@ def get_latency(sys_spec, algo_spec, mapping, verbose=False):
 
     return total_delay, [compute_delay, communicate_delay]
 
-def opt_routing(sys, model, verbose=False):
+def opt_routing(sys, model, ts=None, verbose=False):
     all_routings = generate_routings(sys, model)
     best_latency = 100000000000
     
     all_results = []
     for routing in all_routings:
-        latency, detail_delay = get_latency(sys, model, routing, verbose)
+        latency, detail_delay = get_latency(sys, model, routing, ts, verbose)
         if verbose:
             print(routing, latency)
             all_results.append([routing, latency, detail_delay])
