@@ -147,7 +147,7 @@ def generate_routings(sys_spec, algo_spec):
     return mappings
 
 # Calculate latency
-def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False):
+def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False, batch=1):
 
     d = algo_spec['d']
 
@@ -170,60 +170,60 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False):
     if srvs > 1:
         # 1. Multi servers
         link_GBs = s2s_bw
-        stage2stage_delay = d*2/(s2s_bw*1e9) *1e6 + T_start # in us
+        stage2stage_delay = batch*d*2/(s2s_bw*1e9) *1e6 + T_start # in us
     elif srvs == 1:
         # 2. One server
         link_GBs = p2p_bw
-        stage2stage_delay = d*2/(s2s_bw*1e9) *1e6 + T_start # in us
+        stage2stage_delay = batch*d*2/(s2s_bw*1e9) *1e6 + T_start # in us
     else:
         if pkgs > 1:
             # 3. Multi pkgs
             link_GBs = p2p_bw
-            stage2stage_delay = d*2/(p2p_bw*1e9) *1e6 + T_start # in us
+            stage2stage_delay = batch*d*2/(p2p_bw*1e9) *1e6 + T_start # in us
         elif pkgs == 1:
             # 4. One pkgs
             link_GBs = c2c_bw
-            stage2stage_delay = d*2/(p2p_bw*1e9) *1e6 + T_start # in us
+            stage2stage_delay = batch*d*2/(p2p_bw*1e9) *1e6 + T_start # in us
         else:
             # 5. Multi chips
             link_GBs = c2c_bw
-            stage2stage_delay = d*2/(c2c_bw*1e9) *1e6 + T_start # in us
+            stage2stage_delay = batch*d*2/(c2c_bw*1e9) *1e6 + T_start # in us
 
     t = chips
 
     if hbm_bw == None:
-        compute_time = 4*d*d*2/t/(chip_tops*1e12) * 1e6 # in us
+        compute_time = batch*batch*4*d*d*2/t/(chip_tops*1e12) * 1e6 # in us
     else:
         compute_time = 4*d*d*2/t/(hbm_bw*1e9) * 1e6 # in us
 
     if layers_per_pipe_stage >=1:
         # Atten: atten_compute + all_reduce
-        atten_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+        atten_delays = [compute_time, ring_allreduce(t, batch*d*2, link_GBs, T_start)]
 
         fc1 = mapping['partition']['FC1']
         fc2 = mapping['partition']['FC2']
         if fc1 == 'row':
             if fc2 == 'row':
                 # fc1: fc1_compute + reduce_scatter
-                fc1_delays = [compute_time, reduce_scatter(t, 4*d*2, link_GBs, T_start)]
+                fc1_delays = [compute_time, reduce_scatter(t, batch*4*d*2, link_GBs, T_start)]
                 # fc2: fc2_compute + all_reduce
-                fc2_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+                fc2_delays = [compute_time, ring_allreduce(t, batch*d*2, link_GBs, T_start)]
             elif fc2 == 'col': # all_reduce
                 # fc1: fc1_compute + reduce_scatter
-                fc1_delays = [compute_time, ring_allreduce(t, 4*d*2, link_GBs, T_start)]
+                fc1_delays = [compute_time, ring_allreduce(t, batch*4*d*2, link_GBs, T_start)]
                 # fc2: fc2_compute + all_gather
-                fc2_delays = [compute_time, allgather(t, d*2, link_GBs, T_start)]
+                fc2_delays = [compute_time, allgather(t, batch*d*2, link_GBs, T_start)]
         elif fc1 == 'col':
             if fc2 == 'row':
                 # fc1: fc1_compute
                 fc1_delays = [compute_time]
                 # fc2: fc2_compute + all_reduce
-                fc2_delays = [compute_time, ring_allreduce(t, d*2, link_GBs, T_start)]
+                fc2_delays = [compute_time, ring_allreduce(t, batch*d*2, link_GBs, T_start)]
             elif fc2 == 'col':
                 # fc1: fc1_compute + all_gather
-                fc1_delays = [compute_time, allgather(t, 4*d*2, link_GBs, T_start)]
+                fc1_delays = [compute_time, allgather(t, batch*4*d*2, link_GBs, T_start)]
                 # fc2: fc2_compute + all_gather
-                fc2_delays = [compute_time, allgather(t, d*2, link_GBs, T_start)]
+                fc2_delays = [compute_time, allgather(t, batch*d*2, link_GBs, T_start)]
 
             pipe_stage_delay = (sum(atten_delays) + sum(fc1_delays) + sum(fc2_delays)) * layers_per_pipe_stage + stage2stage_delay
             total_delay = pipe_stage_delay * mapping['p']
@@ -237,11 +237,11 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False):
                 print(pipe_stage_delay, total_delay)
     else:
         # Atten: atten_compute + reduce
-        atten_delays = [compute_time, pipeline_collective(t, d*2, link_GBs, T_start)]
+        atten_delays = [compute_time, pipeline_collective(t, batch*d*2, link_GBs, T_start)]
         # fc1: bcast with fc1_compute
         fc1_delays = [compute_time]
         # fc2: fc2_compute + reduce
-        fc2_delays = [compute_time, pipeline_collective(t, d*2, link_GBs, T_start)]
+        fc2_delays = [compute_time, pipeline_collective(t, batch*d*2, link_GBs, T_start)]
 
         layer_delay = sum(atten_delays) + stage2stage_delay + sum(fc1_delays) + 4*stage2stage_delay + sum(fc2_delays) + stage2stage_delay
         total_delay = algo_spec['num_layers'] * layer_delay
@@ -259,21 +259,45 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, verbose=False):
 
     return total_delay, [compute_delay, communicate_delay]
 
-def opt_routing(sys, model, ts=None, verbose=False):
+def opt_routing(sys, model, ts=None, verbose=False, opt_target='delay'):
     all_routings = generate_routings(sys, model)
     best_latency = 100000000000
+    best_perf = 0.000000001
     
     all_results = []
-    for routing in all_routings:
-        latency, detail_delay = get_latency(sys, model, routing, ts, verbose)
-        if verbose:
-            print(routing, latency)
-            all_results.append([routing, latency, detail_delay])
-        if latency < best_latency:
-            best_latency = latency
-            best_routing = routing
-            [compute_delay, communicate_delay] = detail_delay
+    if opt_target == 'delay':
+        for routing in all_routings:
+            latency, detail_delay = get_latency(sys, model, routing, ts, verbose, 1)
+            if latency < best_latency:
+                best_latency = latency
+                best_routing = routing
+                [compute_delay, communicate_delay] = detail_delay
+                best_thru = 1e6/(best_latency/best_routing['p'])
+            if verbose:
+                print(routing, latency)
+                all_results.append([routing, latency, detail_delay])
+    elif opt_target == 'perf':
+        for routing in all_routings:
+            for batch in [1, 2, 4, 8, 16, 32]:
+                latency, detail_delay = get_latency(sys, model, routing, ts, verbose, batch)
+                thru = 1e6/(latency/routing['p'])*batch
+                perf = thru / latency
+                if perf > best_perf:
+                    best_perf = perf
+                    best_routing = routing
+                    best_latency = latency
+                    best_thru = thru
+                    [compute_delay, communicate_delay] = detail_delay
+           
+    # Throuput
+    # if sys['hbm_bw'] is None:
+    #     best_thru = 1e6/(best_latency/best_routing['p'])*batch
+    # else: # for HBM systems
+    #     total_tops = sys['chip_tops']*sys['chips_per_pkg']*sys['pkgs_per_srv']*sys['num_srvs']
+    #     total_ops_per_token = model['num_layers']*24*model['d']*model['d']
+    #     best_thru = total_tops*1e12/total_ops_per_token
+    
     if verbose:
-        return best_routing, best_latency, [compute_delay, communicate_delay], all_results
+        return best_routing, best_latency, best_thru, [compute_delay, communicate_delay], all_results
     else:
-        return best_routing, best_latency, [compute_delay, communicate_delay]
+        return best_routing, best_latency, best_thru, [compute_delay, communicate_delay]

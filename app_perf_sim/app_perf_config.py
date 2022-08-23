@@ -1,8 +1,8 @@
 #######################################################
 ## model spec
 #######################################################
-gpt2_spec =  {'num_layers': 54,  'd': 1600}
-tnlg_spec =  {'num_layers': 80,  'd': 4256}
+gpt2_spec =  {'num_layers': 54,  'd': 1600} # layer number from 48 to 54
+tnlg_spec =  {'num_layers': 80,  'd': 4256} # layer number from 78 to 80
 gpt3_spec =  {'num_layers': 96,  'd': 12288}
 mtnlg_spec = {'num_layers': 105, 'd': 20480}
 
@@ -245,4 +245,110 @@ si_spec = {'gpt2':   gpt2_si,
            'gpt3':   gpt3_si,
            'mtnlg': mtnlg_si}
 
+# gpu_same_tops
+gpt2_gpu_same_tops = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 1,
+  'num_srvs': 1,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
 
+tnlg_gpu_same_tops = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 8,
+  'num_srvs': 2,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+gpt3_gpu_same_tops = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 8,
+  'num_srvs': 20,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+mtnlg_gpu_same_tops = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 8,
+  'num_srvs': 55,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+gpu_same_tops_spec = {'gpt2':   gpt2_gpu_same_tops,
+                      'tnlg':   tnlg_gpu_same_tops,
+                      'gpt3':   gpt3_gpu_same_tops,
+                      'mtnlg': mtnlg_gpu_same_tops}
+
+# gpu_same_tco
+gpt2_gpu_same_tco = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 1,
+  'num_srvs': 1,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+tnlg_gpu_same_tco = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 2,
+  'num_srvs': 1,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+gpt3_gpu_same_tco = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 8,
+  'num_srvs': 3,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+mtnlg_gpu_same_tco = {
+  'chips_per_pkg': 1,
+  'pkgs_per_srv': 8,
+  'num_srvs': 7,
+  'chip_tops': gpu_tops,
+  'c2c_bw': gpu_p2p_bw,
+  'p2p_bw': gpu_p2p_bw,
+  's2s_bw': gpu_s2s_bw,
+  't_start': ts,
+  'hbm_bw': gpu_hbm_bw
+}
+
+gpu_same_tco_spec = {'gpt2':   gpt2_gpu_same_tco,
+                     'tnlg':   tnlg_gpu_same_tco,
+                     'gpt3':   gpt3_gpu_same_tco,
+                     'mtnlg': mtnlg_gpu_same_tco}
