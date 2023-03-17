@@ -16,9 +16,9 @@ if __name__ == '__main__':
     'chips_per_pkg': 1,
     'pkgs_per_srv': 36,
     'num_srvs': 1,
-    'chip_tops': 36.7,
-    'chip_sram': 360,   # in MB
-    'chip_power': 67,   # in Watt
+    'tops_per_chip': 36.7,
+    'sram_per_chip': 360,   # in MB
+    'power_per_chip': 67,   # in Watt
     'c2c_bw': 100,      # in GB/s
     'p2p_bw': 25,       # in GB/s
     's2s_bw': 10,       # in GB/s
@@ -26,9 +26,11 @@ if __name__ == '__main__':
     'hbm_bw': None
   }
 
-  out_header = ['#srv', 'chip_tops', 'chip_sram', 'chip_power', 'chips_per_srv', 'srv_tco', 'num_srvs', 
+  out_header = ['srv_id', 'tops_per_chip', 'sram_per_chip', 'power_per_chip', 'chips_per_srv', 'srv_tco', 'num_srvs', 
       't', 'p', 'batch', 'latency', 'compute_latency', 'communicate_latency', 'tput', 'latency_best', 'tput_best',
-      'all_tco', 'all_srv_cost', 'utilization', 'all_tco/tops', 'all_tco/tput']
+      'all_tco', 'all_srv_cost', 
+      'real_tops', 'peak_tops', 'utilization',
+      'all_tco/tops', 'all_tco/tput']
   csv_out = open('all.csv', 'w')
   csv_writer = csv.DictWriter(csv_out, fieldnames=out_header)
   csv_writer.writeheader()
@@ -47,20 +49,20 @@ if __name__ == '__main__':
           continue
 
         server = sys_spec.copy()
-        server['pkgs_per_srv'] = int(row[6])
-        server['chip_tops']    = float(row[2])
-        server['chip_sram']    = float(row[1])
-        server['chip_power']   = float(row[3])
+        server['pkgs_per_srv']     = int(row[6])
+        server['tops_per_chip']    = float(row[2])
+        server['sram_per_chip']    = float(row[1])
+        server['power_per_chip']   = float(row[3])
 
         best_latency, best_tput, all_results = opt_mapping(server, algo_spec)
         for r in all_results:
           new_data = {}
-          new_data['#srv']          = line
-          new_data['chip_tops']     = server['chip_tops']
-          new_data['chip_sram']     = server['chip_sram']
-          new_data['chip_power']    = server['chip_power']
-          new_data['chips_per_srv'] = server['pkgs_per_srv']
-          new_data['srv_tco']       = row[11]
+          new_data['srv_id']         = line
+          new_data['tops_per_chip']  = server['tops_per_chip']
+          new_data['sram_per_chip']  = server['sram_per_chip']
+          new_data['power_per_chip'] = server['power_per_chip']
+          new_data['chips_per_srv']  = server['pkgs_per_srv']
+          new_data['srv_tco']        = row[11]
 
           new_data['num_srvs'] = r[0]['srvs']
           new_data['t'] = r[0]['t']
@@ -81,7 +83,9 @@ if __name__ == '__main__':
             new_data['tput_best'] = '0'
             
           total_tops = new_data['tput'] * algo_spec['num_layers'] * algo_spec['d'] * algo_spec['d'] * 24 / 1e12 # tera operations per sec
-          theory_peak_tops = new_data['num_srvs'] * new_data['chips_per_srv'] * new_data['chip_tops']
+          theory_peak_tops = new_data['num_srvs'] * new_data['chips_per_srv'] * new_data['tops_per_chip']
+          new_data['real_tops'] = total_tops
+          new_data['peak_tops'] = theory_peak_tops
           new_data['utilization'] = float(total_tops/theory_peak_tops)
           # TCO fix portion: SrvAmortization, SrvInterest
           srv_tco_fix = float(row[15]) + float(row[16])
@@ -92,21 +96,7 @@ if __name__ == '__main__':
           new_data['all_tco/tput'] = new_data['all_tco'] / new_data['tput']
 
           csv_writer.writerow(new_data)
+
       line += 1
 
   csv_out.close()
-
-
-  # for r in all_results:
-  #   m = r[0]
-  #   compute_latency = r[2][0]
-  #   communicate_latency = r[2][1]
-  #   util = r[2][2]
-  #   print(m['t_chip'], m['p'], compute_latency, communicate_latency, util)
-
-  # print(best_routing, best_latency)
-  # print(len(all_results))
-
-  # mappings = generate_mappings(sys_spec, algo_spec)
-  # for m in mappings:
-  #   print(m['t_srv'], m['t_chip'], m['p'], m['all_srv'])

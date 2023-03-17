@@ -9,13 +9,6 @@ mapping_default = {
     'all_srv': 1,
 }
 
-def product_of_two(num):
-    pairs = []
-    for i in range(1, num+1):
-        if num % i == 0:
-            pairs.append([i, int(num/i)])
-    return pairs
-
 ########################################
 # Collective Opeartion Timing
 ########################################
@@ -66,7 +59,7 @@ def generate_mappings(sys_spec, algo_spec):
     num_srvs = sys_spec['num_srvs']
     pkgs_per_srv = sys_spec['pkgs_per_srv']
     chips_per_pkg = sys_spec['chips_per_pkg']
-    chip_sram = sys_spec['chip_sram']
+    chip_sram = sys_spec['sram_per_chip']
     chips_per_srv = pkgs_per_srv * chips_per_pkg
     srv_sram = chip_sram * chips_per_srv # in MB
 
@@ -79,17 +72,15 @@ def generate_mappings(sys_spec, algo_spec):
     kv_cache_size =  num_layers * 2 * algo_spec['max_ctx_len'] * model_d * data_bytes # in bytes, per input
     total_mem_size = (model_param_size + batch_size * kv_cache_size) / 1e6 # in MB
 
+    # generate pipeline parallelism size p, which is the number of pipeline stages
     all_p = []
-
-    # generate pipeline parallelism size
-    p = num_trans_stages+1
-    for i in range(1, num_trans_stages+1):
-      if math.ceil(num_trans_stages/i) < p:
-        p = math.ceil(num_trans_stages/i)
+    for trans_stages_per_pipe_stage in range(1, num_trans_stages+1):
+      p = math.ceil(num_trans_stages/trans_stages_per_pipe_stage)
+      if p not in all_p:
         all_p.append(p)
 
     mappings = []
-    # generate tensor parallelism size
+    # generate tensor parallelism size t, which is the number of chips being used per pipeline stage
     for p in all_p:
       # this number could be a bit small for unbalanced pipelines
       mem_per_pipe_stage = total_mem_size / p
@@ -123,7 +114,7 @@ def generate_mappings(sys_spec, algo_spec):
     return mappings
 
 # Calculate latency
-def get_latency(sys_spec, algo_spec, mapping, ts=None, prefill=None, verbose=False):
+def get_latency(sys_spec, algo_spec, mapping, micro_batch, ts=None, prefill=None):
 
     d = algo_spec['d']
     batch = algo_spec['batch_size']
@@ -131,13 +122,15 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, prefill=None, verbose=Fal
     if prefill:
       activation_row  = algo_spec['max_ctx_len'] * batch
     else:
-      activation_row  = batch
+      # activation_row  = batch
+      activation_row  = micro_batch
+
     activation_col  = d
     activation_size = activation_row * activation_col
 
     layers_per_pipe_stage = algo_spec['num_layers'] / mapping['p'] # 0.33 means one transformer stage
 
-    chip_tops = sys_spec['chip_tops']
+    chip_tops = sys_spec['tops_per_chip']
     # assume 1 GHz
     chip_macs = int(chip_tops/2*1e3)
     c2c_bw = sys_spec['c2c_bw']
@@ -234,6 +227,8 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, prefill=None, verbose=Fal
 
       compute_delay = mapping['p'] * (atten_qkv_delay+atten_fc_delay+fc1_delay+fc2_delay) * layers_per_pipe_stage
 
+      critical_pipe_stage_delay = pipe_stage_delay
+
     elif layers_per_pipe_stage > 0.4: 
       # 2 layers per 3 pipe stages,
       # pipeline stage could be: (atten, fc1), (fc2, atten), (fc1, fc2)
@@ -254,8 +249,10 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, prefill=None, verbose=Fal
 
       compute_delay = mapping['p'] * (atten_qkv_delay+atten_fc_delay+fc1_delay+fc2_delay) * layers_per_pipe_stage
 
+      critical_pipe_stage_delay = max(pipe_stage_delay_1, pipe_stage_delay_2, pipe_stage_delay_3)
+
     else: 
-      # 1 layers per 3 pipe stages
+      # 1 layers per 3 pipe stages --> 1 transforer stage is 1 pipe stage
       # Atten: atten_compute + reduce
       atten_delays = [atten_qkv_delay, atten_fc_delay, pipeline_collective(t, activation_size*data_bytes, link_GBs, T_start)]
       # fc1: bcast with fc1_compute
@@ -268,19 +265,13 @@ def get_latency(sys_spec, algo_spec, mapping, ts=None, prefill=None, verbose=Fal
 
       compute_delay = mapping['p'] * (atten_qkv_delay+atten_fc_delay+fc1_delay+fc2_delay) * layers_per_pipe_stage
 
-      if verbose:
-          print(mapping['p'])
-          print(atten_delays, stage2stage_delay, fc1_delays, 4*stage2stage_delay, fc2_delays, stage2stage_delay)
-          print(layer_delay, total_delay)
+      critical_pipe_stage_delay = max(sum(atten_delays)+stage2stage_delay, sum(fc1_delays)+4*stage2stage_delay, sum(fc2_delays)+stage2stage_delay)
 
     communicate_delay = total_delay - compute_delay
 
-    if verbose:
-        print('compute delay:', compute_delay, 'communicate delay:', communicate_delay)
+    return total_delay, [compute_delay, communicate_delay, critical_pipe_stage_delay]
 
-    return total_delay, [compute_delay, communicate_delay, fc1_util]
-
-def opt_mapping(sys, model, ts=None, verbose=False, opt_target='delay'):
+def opt_mapping(sys, model, ts=None, opt_target='delay'):
   all_mappings = generate_mappings(sys, model)
   best_latency = 100000000000
   best_tput = 0.000000001
@@ -289,9 +280,18 @@ def opt_mapping(sys, model, ts=None, verbose=False, opt_target='delay'):
   if opt_target == 'delay':
     for mapping in all_mappings:
       for batch in [1, 2, 4, 8, 16, 32, 64, 128, 256]:
+        micro_batch = 1
         model['batch_size'] = batch
-        latency, detail_delay = get_latency(sys, model, mapping, ts, None, verbose)
-        tput = 1e6/(latency/mapping['p'])*batch
+        # latency, detail_delay = get_latency(sys, model, mapping, ts, None)
+        micro_batch_latency, detail_delay = get_latency(sys, model, mapping, micro_batch, ts, None)
+        critical_pipe_stage_delay = detail_delay[2]
+        if batch == 1:
+          latency = micro_batch_latency
+          tput = 1e6/latency
+        else:
+          latency = micro_batch_latency + critical_pipe_stage_delay*(batch/micro_batch)
+          squeeze_latency = max(micro_batch_latency, critical_pipe_stage_delay*(batch/micro_batch))
+          tput = 1e6/squeeze_latency * batch
 
         mapping_batch = {'t': mapping['t_chip'], 'p': mapping['p'], 'srvs': mapping['all_srv'], 'batch': batch }
 
