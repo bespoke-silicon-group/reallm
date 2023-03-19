@@ -2,6 +2,7 @@ basejump_stl/
 bsg_cadenv/
 DVEfiles/
 out/
+.vscode/
 *.vpd
 *.swp
 *.pyc
@@ -10,3 +11,4 @@ out/
 *.pdf
 ucli.key
 vc_hdrs.h
+.ipynb_checkpoints

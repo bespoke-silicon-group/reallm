@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import math
 from typing import List
 
+hw_csv = "../asic_cloud_sim_v2/exploration.csv"
+all_csv = "../app_perf_sim_v2/all.csv"
+
 pd.set_option("display.max.columns", None)
 
 def pareto_front_filter_2d(df: pd.DataFrame, x_label: str, y_label: str, x_lower_is_better: bool=True, y_lower_is_better: bool=True) -> pd.DataFrame:
@@ -21,19 +24,19 @@ def pareto_front_filter_2d(df: pd.DataFrame, x_label: str, y_label: str, x_lower
             result.loc[idx] = row
     return result
 
-df = pd.read_csv("all.csv")
+df = pd.read_csv(all_csv)
 print(df.columns)
 
-hw = pd.read_csv("exploration.csv")
+hw = pd.read_csv(hw_csv)
 
 # concat hw infor into the main df
-df = pd.concat([hw.loc[map(lambda x: x-1, df["#srv"].to_numpy().tolist())].reset_index(drop=True), df], axis=1)
+df = pd.concat([hw.loc[map(lambda x: x-1, df["srv_id"].to_numpy().tolist())].reset_index(drop=True), df], axis=1)
 df.head()
 # %%
 
 # add W/tput
-df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['chip_power']*row['utilization']) / row['tput'], axis=1)
-#df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['chip_power']) / row['tput'], axis=1)
+df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']*row['utilization']) / row['tput'], axis=1)
+#df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']) / row['tput'], axis=1)
 
 # add $/tput
 df['$/tput'] = df.apply(lambda row: row['all_srv_cost'] / row['tput'], axis=1)
@@ -47,8 +50,8 @@ df['$/tput'] = df.apply(lambda row: row['all_srv_cost'] / row['tput'], axis=1)
 #     >   ' [16]SrvAmortization', ' [17]SrvInterest', ' [18]SrvOpex',
 #     >   ' [19]SrvPower', ' [20]PUEOverhead', ' [21]cost_per_tops',
 #     >   ' [22]watts_per_tops', ' [23]tco_per_tops',
-#     >   ' [24]max_die_power_per_server', ' [25]die_yield', ' ', '#srv',
-#     >   'chip_tops', 'chip_sram', 'chip_power', 'chips_per_srv', 'srv_tco',
+#     >   ' [24]max_die_power_per_server', ' [25]die_yield', ' ', 'srv_id',
+#     >   'chip_tops', 'chip_sram', 'power_per_chip', 'chips_per_srv', 'srv_tco',
 #     >   'num_srvs', 't', 'p', 'batch', 'latency', 'compute_latency',
 #     >   'communicate_latency', 'tput', 'latency_best', 'tput_best', 'all_tco',
 #     >   'all_srv_cost', 'utilization', 'all_tco/tops', 'all_tco/tput', 'W/tput',
@@ -58,7 +61,7 @@ df.head()
 
 #%%
 
-plt.figure(figsize=(8,6))
+plt.figure(figsize=(8,6), dpi=200)
 plt.yscale("log")
 plt.xscale("log")
 for batch_size in pd.unique(df["batch"]):
@@ -68,17 +71,19 @@ for batch_size in pd.unique(df["batch"]):
 # %%
 # Plot GPT3 Pareto Curve
 
-pareto_n1   = pareto_front_filter_2d( df[df["batch"] ==   1], "all_tco/tput", "latency", )
-pareto_n2   = pareto_front_filter_2d( df[df["batch"] ==   2], "all_tco/tput", "latency", )
-pareto_n4   = pareto_front_filter_2d( df[df["batch"] ==   4], "all_tco/tput", "latency", )
-pareto_n8   = pareto_front_filter_2d( df[df["batch"] ==   8], "all_tco/tput", "latency", )
-pareto_n16  = pareto_front_filter_2d( df[df["batch"] ==  16], "all_tco/tput", "latency", )
-pareto_n32  = pareto_front_filter_2d( df[df["batch"] ==  32], "all_tco/tput", "latency", )
-pareto_n64  = pareto_front_filter_2d( df[df["batch"] ==  64], "all_tco/tput", "latency", )
-pareto_n128 = pareto_front_filter_2d( df[df["batch"] == 128], "all_tco/tput", "latency", )
-pareto_n256 = pareto_front_filter_2d( df[df["batch"] == 256], "all_tco/tput", "latency", )
+pareto_n1    = pareto_front_filter_2d( df[df["batch"] ==    1], "all_tco/tput", "latency", )
+pareto_n2    = pareto_front_filter_2d( df[df["batch"] ==    2], "all_tco/tput", "latency", )
+pareto_n4    = pareto_front_filter_2d( df[df["batch"] ==    4], "all_tco/tput", "latency", )
+pareto_n8    = pareto_front_filter_2d( df[df["batch"] ==    8], "all_tco/tput", "latency", )
+pareto_n16   = pareto_front_filter_2d( df[df["batch"] ==   16], "all_tco/tput", "latency", )
+pareto_n32   = pareto_front_filter_2d( df[df["batch"] ==   32], "all_tco/tput", "latency", )
+pareto_n64   = pareto_front_filter_2d( df[df["batch"] ==   64], "all_tco/tput", "latency", )
+pareto_n128  = pareto_front_filter_2d( df[df["batch"] ==  128], "all_tco/tput", "latency", )
+pareto_n256  = pareto_front_filter_2d( df[df["batch"] ==  256], "all_tco/tput", "latency", )
+pareto_n512  = pareto_front_filter_2d( df[df["batch"] ==  512], "all_tco/tput", "latency", )
+pareto_n1024 = pareto_front_filter_2d( df[df["batch"] == 1024], "all_tco/tput", "latency", )
 
-fig, axes = plt.subplots(1, 1, figsize=(8,6))
+fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
 
 ax = axes
 
@@ -91,6 +96,8 @@ ax.plot(pareto_n32["all_tco/tput"],  pareto_n32["latency"] , linestyle='--', mar
 ax.plot(pareto_n64["all_tco/tput"],  pareto_n64["latency"] , linestyle='--', marker='o', label=64)
 ax.plot(pareto_n128["all_tco/tput"], pareto_n128["latency"], linestyle='--', marker='o', label=128)
 ax.plot(pareto_n256["all_tco/tput"], pareto_n256["latency"], linestyle='--', marker='o', label=256)
+ax.plot(pareto_n512["all_tco/tput"], pareto_n512["latency"], linestyle='--', marker='o', label=512)
+ax.plot(pareto_n1024["all_tco/tput"], pareto_n1024["latency"], linestyle='--', marker='o', label=1024)
 
 ax.set_xscale("log")
 #ax.set_xlim(right=56)
@@ -100,7 +107,8 @@ ax.set_yscale("log")
 ax.set_ylabel("Latency (us)")
 
 ax.set_title("GPT3 Pareto Curve")
-ax.legend(title="Batch Size", loc="upper right")
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], title="Batch Size", loc="upper right")
 
 pareto_n128.sort_values("latency", ascending=True)
 pareto_n1.sort_values("latency", ascending=True)
@@ -120,7 +128,7 @@ tco_optimal_n1 = pareto_n1.loc[pd.to_numeric(pareto_n1['all_tco/tput']).idxmin()
 tco_optimal_n8 = pareto_n8.loc[pd.to_numeric(pareto_n8['all_tco/tput']).idxmin()]
 tco_optimal_n64 = pareto_n64.loc[pd.to_numeric(pareto_n64['all_tco/tput']).idxmin()]
 
-fig, axes = plt.subplots(1, 1, figsize=(8,6))
+fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
 ax = axes
 
 #ax.scatter(n1["W/tput"], n1["$/tput"], s=1.0, c="blue")

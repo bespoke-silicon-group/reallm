@@ -26,6 +26,8 @@ def chiplet_elaborator(design):
   asic_spec['sram_per_asic'] = mem_size
 
   die_area = asic_spec['die_area']
+  if tops<CONSTANTS.MinTOPS or die_area>CONSTANTS.DieMaxSize:
+    return
 
   # calculate die yield and cost
   die_yield = die_yield_calc(die_area, tech)

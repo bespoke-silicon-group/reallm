@@ -4,6 +4,8 @@ from opt_mapping import opt_mapping, generate_mappings
 
 if __name__ == '__main__': 
 
+  hw_csv = '../asic_cloud_sim_v2/exploration.csv'
+
   algo_spec = {
     'num_layers': 96,
     'd': 12288,
@@ -35,19 +37,11 @@ if __name__ == '__main__':
   csv_writer = csv.DictWriter(csv_out, fieldnames=out_header)
   csv_writer.writeheader()
 
-  with open('exploration.csv') as f:
+  with open(hw_csv) as f:
     csv_reader = csv.reader(f, delimiter=',')
     line = 0
     for row in csv_reader:
       if line > 0:
-        print('Evaluating chip ', line)
-        if(float(row[4])>800.0):
-          print('Chip too big')
-          continue
-        if(float(row[2])<0.01): # TOPS
-          print('MACs too few')
-          continue
-
         server = sys_spec.copy()
         server['pkgs_per_srv']     = int(row[6])
         server['tops_per_chip']    = float(row[2])
