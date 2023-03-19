@@ -43,12 +43,13 @@ if __name__ == '__main__':
     for row in csv_reader:
       if line > 0:
         server = sys_spec.copy()
+        algo = algo_spec.copy()
         server['pkgs_per_srv']     = int(row[6])
         server['tops_per_chip']    = float(row[2])
         server['sram_per_chip']    = float(row[1])
         server['power_per_chip']   = float(row[3])
 
-        best_latency, best_tput, all_results = opt_mapping(server, algo_spec)
+        best_latency, best_tput, all_results = opt_mapping(server, algo)
         for r in all_results:
           new_data = {}
           new_data['srv_id']         = line
