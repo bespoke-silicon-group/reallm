@@ -278,10 +278,11 @@ def opt_mapping(sys, model, ts=None, opt_target='delay'):
   
   all_results = []
   if opt_target == 'delay':
-    for mapping in all_mappings:
-      for batch in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]:
+    for batch in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]:
+      model['batch_size'] = batch
+      all_mappings = generate_mappings(sys, model)
+      for mapping in all_mappings:
         micro_batch = 1
-        model['batch_size'] = batch
         # latency, detail_delay = get_latency(sys, model, mapping, ts, None)
         micro_batch_latency, detail_delay = get_latency(sys, model, mapping, micro_batch, ts, None)
         critical_pipe_stage_delay = detail_delay[2]
