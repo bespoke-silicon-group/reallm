@@ -208,47 +208,68 @@ for i in range(len(gpu_tput)):
 
 fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
 ax = axes
-ax.plot(pareto_all["tco/token"]*1000, pareto_all["latency"]/1e3,  linestyle='--', marker='^', label="Chiplet Cloud")
-ax.plot(tpu["tco/token"], tpu["latency"],  linestyle='--', marker='+', label="TPU")
-ax.plot(gpu["tco/token"], gpu["latency"],  linestyle='--', marker='o', label="GPU")
+ax.plot(pareto_all["tco/token"]*1000, pareto_all["latency"]/1e3, 
+        linestyle='--', marker='^', 
+        markeredgecolor='black', markerfacecolor='tab:blue', c='tab:blue',
+        markeredgewidth=0.5, markersize=10,
+        label="Chiplet Cloud")
+ax.plot(tpu["tco/token"], tpu["latency"],
+        linestyle='--', marker='s', 
+        markeredgecolor='black', markerfacecolor='tab:green', c='tab:green',
+        markeredgewidth=0.5, markersize=10,
+        label="TPU")
+ax.plot(gpu["tco/token"], gpu["latency"],
+        linestyle='--', marker='o', 
+        markeredgecolor='black', markerfacecolor='tab:red', c='tab:red',
+        markeredgewidth=0.5, markersize=10,
+        label="GPU")
 
-ax.axvline(x=latency_optimal["tco/token"]*1000, linestyle='--', c='black', linewidth=0.8)
-left = (latency_optimal["tco/token"]*1000, tpu["latency"][2])
-right = (tpu["tco/token"][2], tpu["latency"][2])
-ax.annotate("", xy=left, xytext=right,
-            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
-tpu_tco_improve = latency_optimal["tco/token"]*1000/tpu["tco/token"][2] 
-ax.text(9e-4, 90, f'{tpu_tco_improve:.3f}x')
+cc_opt  = (latency_optimal["tco/token"]*1000, latency_optimal["latency"]/1000)
+tpu_opt = (tpu["tco/token"][2], tpu["latency"][2])
+gpu_opt = (gpu["tco/token"][0], gpu["latency"][0])
 
-ax.axhline(y=latency_optimal["latency"]/1e3, linestyle='--', c='black', linewidth=0.8)
-top = (tpu["tco/token"][2], tpu["latency"][2])
-bot = (tpu["tco/token"][2], latency_optimal["latency"]/1e3)
-ax.annotate("", xy=bot, xytext=top,
-            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
-tpu_latency_improve = latency_optimal["latency"]/1000/tpu["latency"][2] 
-ax.text(2.8e-3, 30, f'{tpu_latency_improve:.3f}x')
+# TCO improvement
+color = 'salmon'
+ax.axvline(x=cc_opt[0], linestyle=':', c=color, linewidth=1.5)
+for right in [tpu_opt, gpu_opt]:
+    left = (cc_opt[0], right[1])
+    ax.annotate("", xy=left, xytext=right,
+                arrowprops=dict(arrowstyle="<->", color=color, linewidth=1))
+    ax.text(math.sqrt(right[0]*left[0]), right[1], 
+            f'{(right[0]/left[0]):.1f}x',
+            fontsize='large',
+            ha='center', va="center",
+            bbox=dict(boxstyle="round",
+                       edgecolor='black',
+                       facecolor=color
+                       )
+            )
 
-left = (latency_optimal["tco/token"]*1000, gpu["latency"][0])
-right = (gpu["tco/token"][0], gpu["latency"][0])
-ax.annotate("", xy=left, xytext=right,
-            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
-gpu_tco_improve = latency_optimal["tco/token"]*1000/gpu["tco/token"][0] 
-ax.text(4e-3, 5e2, f'{gpu_tco_improve:.3f}x')
+# Latency improvement
+color = 'deepskyblue'
+ax.axhline(y=cc_opt[1], linestyle=':', c=color, linewidth=1.5)
+for top in [tpu_opt, gpu_opt]:
+    bot = (top[0], cc_opt[1])
+    ax.annotate("", xy=bot, xytext=top,
+                arrowprops=dict(arrowstyle="<->", color=color, linewidth=1))
+    ax.text(top[0], math.sqrt(top[1]*bot[1]),
+            f'{(top[1]/bot[1]):.1f}x',
+            fontsize='large',
+            ha='center', va="center",
+            bbox=dict(boxstyle="round",
+                       edgecolor='black',
+                       facecolor=color
+                       )
+            )
 
-top = (gpu["tco/token"][0], gpu["latency"][0])
-bot = (gpu["tco/token"][0], latency_optimal["latency"]/1e3)
-ax.annotate("", xy=bot, xytext=top,
-            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
-gpu_latency_improve = latency_optimal["latency"]/1000/gpu["latency"][0] 
-ax.text(2.9e-2, 100, f'{gpu_latency_improve:.3f}x')
-
-ax.set_xlabel("TCO per 1K tokens ($)")
-ax.set_ylabel("Latency (ms)")
+ax.set_xlabel("TCO per 1K tokens ($)", fontsize=12)
+ax.set_ylabel("Latency (ms)", fontsize=12)
 ax.set_xscale("log")
 ax.set_yscale("log")
-ax.grid(which='both')
+ax.grid(which='both', c='whitesmoke')
 
-ax.legend()
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], loc="lower right", fontsize=12)
 
 
 # %%
