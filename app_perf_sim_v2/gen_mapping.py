@@ -5,14 +5,33 @@ from opt_mapping import opt_mapping, generate_mappings
 if __name__ == '__main__': 
 
   hw_csv = '../asic_cloud_sim_v2/exploration.csv'
+  model_name = 'mtnlg'
 
-  algo_spec = {
+  gpt3 = {
     'num_layers': 96,
     'd': 12288,
     'max_ctx_len': 2048,
     'batch_size': 1,
     'bytes_per_number': 2
   }
+
+  gpt2 = {
+    'num_layers': 48,
+    'd': 1600,
+    'max_ctx_len': 1024,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  mtnlg = {
+    'num_layers': 105,
+    'd': 20480,
+    'max_ctx_len': 2048,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  all_models = {'gpt2': gpt2, 'gpt3': gpt3, 'mtnlg':mtnlg}
 
   sys_spec = {
     'chips_per_pkg': 1,
@@ -33,7 +52,7 @@ if __name__ == '__main__':
       'all_tco', 'all_srv_cost', 
       'real_tops', 'peak_tops', 'utilization',
       'all_tco/tops', 'all_tco/tput']
-  csv_out = open('all.csv', 'w')
+  csv_out = open(model_name+'_all.csv', 'w')
   csv_writer = csv.DictWriter(csv_out, fieldnames=out_header)
   csv_writer.writeheader()
 
@@ -43,7 +62,7 @@ if __name__ == '__main__':
     for row in csv_reader:
       if line > 0:
         server = sys_spec.copy()
-        algo = algo_spec.copy()
+        algo = all_models[model_name].copy()
         server['pkgs_per_srv']     = int(row[6])
         server['tops_per_chip']    = float(row[2])
         server['sram_per_chip']    = float(row[1])
@@ -77,7 +96,7 @@ if __name__ == '__main__':
           else:
             new_data['tput_best'] = '0'
             
-          total_tops = new_data['tput'] * algo_spec['num_layers'] * algo_spec['d'] * algo_spec['d'] * 24 / 1e12 # tera operations per sec
+          total_tops = new_data['tput'] * algo['num_layers'] * algo['d'] * algo['d'] * 24 / 1e12 # tera operations per sec
           theory_peak_tops = new_data['num_srvs'] * new_data['chips_per_srv'] * new_data['tops_per_chip']
           new_data['real_tops'] = total_tops
           new_data['peak_tops'] = theory_peak_tops
