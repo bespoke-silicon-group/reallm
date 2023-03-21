@@ -81,7 +81,9 @@ plt.xlabel("TCO/Tokens/sec")
 plt.ylabel("Latency (us)")
 for batch_size in pd.unique(df["batch"]):
     series = df[df["batch"] == batch_size]
-    plt.scatter(x=series["all_tco/tput"], y=series["latency"], s=0.04, marker='.')
+    plt.scatter(x=series["all_tco/tput"], y=series["latency"], s=0.04, marker='.', label=batch_size)
+
+plt.legend(title="Batch Size", loc="upper right", markerscale=20)
 
 # plt.ylim(bottom=3000, top=4000)
 # plt.xlim(left=1e2, right=20000)
@@ -182,15 +184,84 @@ ax.legend(title="Batch Size")
 pareto_n64.sort_values("$/tput", ascending=True)
 
 # %%
+# all pareto 
+pareto_all = pareto_front_filter_2d(df, "tco/token", "latency", )
+pareto_all.sort_values("latency", ascending=True)
+latency_optimal = pareto_all.loc[pd.to_numeric(pareto_all['latency']).idxmax()]
+
+tpu_540B={"latency":[32, 45, 180], "chip_ms_per_token":[64,16*1.41, 8*1.41], "num_chips":[128, 64, 64], "batch":[64, 128, 1024]}
+tpu_price = 3.22 # per chip-hour
+tpu={"tco/token":[], "latency":[]}
+for i in range(len(tpu_540B["latency"])):
+    tpu["latency"].append(tpu_540B["latency"][i] /1.7) # GPT3 estimates
+    tpu["tco/token"].append(tpu_540B["chip_ms_per_token"][i]*1000*(tpu_price/3600/1000) / 2.2) # GPT3 estimates
+
+gpu_tput = [18]
+gpu_latency = [620]
+gpu_tflops = [70]
+gpu_num = [16]
+gpu_price = 3.05 # per GPU per hour
+gpu={"tco/token":[], "latency":[]}
+for i in range(len(gpu_tput)):
+    gpu["latency"].append(gpu_latency[i])
+    gpu["tco/token"].append(gpu_price/3600/gpu_tput[i] * 1000)
+
+fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
+ax = axes
+ax.plot(pareto_all["tco/token"]*1000, pareto_all["latency"]/1e3,  linestyle='--', marker='^', label="Chiplet Cloud")
+ax.plot(tpu["tco/token"], tpu["latency"],  linestyle='--', marker='+', label="TPU")
+ax.plot(gpu["tco/token"], gpu["latency"],  linestyle='--', marker='o', label="GPU")
+
+ax.axvline(x=latency_optimal["tco/token"]*1000, linestyle='--', c='black', linewidth=0.8)
+left = (latency_optimal["tco/token"]*1000, tpu["latency"][2])
+right = (tpu["tco/token"][2], tpu["latency"][2])
+ax.annotate("", xy=left, xytext=right,
+            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
+tpu_tco_improve = latency_optimal["tco/token"]*1000/tpu["tco/token"][2] 
+ax.text(9e-4, 90, f'{tpu_tco_improve:.3f}x')
+
+ax.axhline(y=latency_optimal["latency"]/1e3, linestyle='--', c='black', linewidth=0.8)
+top = (tpu["tco/token"][2], tpu["latency"][2])
+bot = (tpu["tco/token"][2], latency_optimal["latency"]/1e3)
+ax.annotate("", xy=bot, xytext=top,
+            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
+tpu_latency_improve = latency_optimal["latency"]/1000/tpu["latency"][2] 
+ax.text(2.8e-3, 30, f'{tpu_latency_improve:.3f}x')
+
+left = (latency_optimal["tco/token"]*1000, gpu["latency"][0])
+right = (gpu["tco/token"][0], gpu["latency"][0])
+ax.annotate("", xy=left, xytext=right,
+            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
+gpu_tco_improve = latency_optimal["tco/token"]*1000/gpu["tco/token"][0] 
+ax.text(4e-3, 5e2, f'{gpu_tco_improve:.3f}x')
+
+top = (gpu["tco/token"][0], gpu["latency"][0])
+bot = (gpu["tco/token"][0], latency_optimal["latency"]/1e3)
+ax.annotate("", xy=bot, xytext=top,
+            arrowprops=dict(arrowstyle="<->", color='black', linewidth=1))
+gpu_latency_improve = latency_optimal["latency"]/1000/gpu["latency"][0] 
+ax.text(2.9e-2, 100, f'{gpu_latency_improve:.3f}x')
+
+ax.set_xlabel("TCO per 1K tokens ($)")
+ax.set_ylabel("Latency (ms)")
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.grid(which='both')
+
+ax.legend()
+
+
+# %%
 # generate all pareto 
-pareto_all = pareto_front_filter_2d(df[df["batch"]==8], "tco/token", "latency", )
+# pareto_all = pareto_front_filter_2d(df[(df["batch"]==8) & (df["p"]==144)], "tco/token", "latency", )
+pareto_all = pareto_front_filter_2d(df[(df["batch"]==8)], "tco/token", "latency", )
 pareto_all.sort_values("latency", ascending=True)
 pareto_all.head()
 
 # %%
 # How different factors affect the pareto points?
 
-fig, axes = plt.subplots(5, 2, sharex=True, sharey=True, figsize=(9, 11), dpi=300)
+fig, axes = plt.subplots(3, 2, sharex=True, sharey=True, figsize=(9, 7), dpi=300)
 plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=0.5)
 
 markers = ['1', '+', '2' ,'x', '3', '|', '4']
@@ -213,53 +284,53 @@ for i in range(num_bins):
 handles, labels = ax.get_legend_handles_labels()
 ax.legend(handles[::-1], labels[::-1], title="TCO Budget($)", loc="upper right", markerscale=1.3, framealpha=1)
 
+# ax = axes[0][1]
+# feature = "real_w"
+# _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+# for i in range(num_bins):
+#     left = bin_edges[i]
+#     right = bin_edges[i+1]
+#     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+#     if model == 'gpt3':
+#         ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                    s=marker_size,
+#                    marker=markers[i%len(markers)],
+#                    label=f"[{left:.0f}, {right:.0f})")
+#     else:
+#         ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                    s=marker_size,
+#                    marker=markers[i%len(markers)],
+#                    label=f"[{left/1000:.0f}K, {right/1000:.0f}K)")
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], title="Power Budget(W)", loc="upper right", markerscale=1.3, framealpha=1)
+
 ax = axes[0][1]
-feature = "real_w"
-_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
-for i in range(num_bins):
-    left = bin_edges[i]
-    right = bin_edges[i+1]
-    series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
-    if model == 'gpt3':
+i = 0
+p_df = pareto_all.sort_values("p", ascending=True)
+for p in pd.unique(p_df["p"]):
+    series = p_df[p_df["p"] == p]
+    if not series.empty:
         ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
                    s=marker_size,
                    marker=markers[i%len(markers)],
-                   label=f"[{left:.0f}, {right:.0f})")
-    else:
-        ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-                   s=marker_size,
-                   marker=markers[i%len(markers)],
-                   label=f"[{left/1000:.0f}K, {right/1000:.0f}K)")
+                   label=p)
+    i += 1
 handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], title="Power Budget(W)", loc="upper right", markerscale=1.3, framealpha=1)
+ax.legend(handles[::-1], labels[::-1], ncol=2, title="Pipeline Stages", loc="upper right", markerscale=1.3, framealpha=1)
 
-ax = axes[1][0]
-feature = " [5]die_area"
-_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
-for i in range(num_bins):
-    left = bin_edges[i]
-    right = bin_edges[i+1]
-    series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
-    ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-               s=marker_size,
-               marker=markers[i%len(markers)],
-               label=f"[{left:.0f}, {right:.0f})")
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], title="Chip Area (mm2)", loc="upper right", markerscale=1.3, framealpha=1)
-
-ax = axes[1][1]
-feature = "tops/mb"
-_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
-for i in range(num_bins):
-    left = bin_edges[i]
-    right = bin_edges[i+1]
-    series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
-    ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-               s=marker_size,
-               marker=markers[i%len(markers)],
-               label=f"[{left:.3f}, {right:.3f})")
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], title="TOPS/MB", loc="upper right", markerscale=1.3, framealpha=1)
+# ax = axes[1][1]
+# i = 0
+# p_df = pareto_all.sort_values("t", ascending=True)
+# for batch in pd.unique(p_df["t"]):
+#     series = p_df[p_df["t"] == batch]
+#     if not series.empty:
+#         ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                    s=marker_size,
+#                    marker=markers[i%len(markers)],
+#                    label=batch)
+#     i += 1
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], ncol=4, title="T", loc="upper right", markerscale=1.3, framealpha=1)
 
 # ax = axes[2][0]
 # feature = "chips_per_srv"
@@ -278,7 +349,21 @@ ax.legend(handles[::-1], labels[::-1], title="TOPS/MB", loc="upper right", marke
 # handles, labels = ax.get_legend_handles_labels()
 # ax.legend(handles[::-1], labels[::-1], ncol=2, title="Chips per Server", loc="upper right", markerscale=1.3, framealpha=1)
 
-ax = axes[2][0]
+ax = axes[1][0]
+feature = "peak_tops"
+_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+for i in range(num_bins):
+    left = bin_edges[i]
+    right = bin_edges[i+1]
+    series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+    ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+               s=marker_size,
+               marker=markers[i%len(markers)],
+               label=f"[{left:.0f}, {right:.0f})")
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], title="Total TOPS", loc="upper right", markerscale=1.3, framealpha=1)
+
+ax = axes[1][1]
 feature = "all_area"
 _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
 for i in range(num_bins):
@@ -295,7 +380,7 @@ for i in range(num_bins):
 handles, labels = ax.get_legend_handles_labels()
 ax.legend(handles[::-1], labels[::-1], ncol=1, title="Total Area (mm2)", loc="upper right", markerscale=1.3, framealpha=1)
 
-ax = axes[2][1]
+ax = axes[2][0]
 feature = "num_srvs"
 i = 0
 p_df = pareto_all.sort_values(feature, ascending=True)
@@ -308,21 +393,65 @@ for p in pd.unique(p_df[feature]):
                    label=p)
     i += 1
 handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], ncol=2, title="Num of Servers", loc="upper right", markerscale=1.3, framealpha=1)
+ax.legend(handles[::-1], labels[::-1], ncol=3, title="Num of Servers", loc="upper right", markerscale=1.3, framealpha=1)
 
-ax = axes[3][0]
-feature = " [10]tops_per_server"
-_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
-for i in range(num_bins):
+
+ax = axes[2][1]
+feature = "utilization"
+_, bin_edges = np.histogram(pareto_all[feature], bins=5)
+for i in range(5):
     left = bin_edges[i]
     right = bin_edges[i+1]
     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
     ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
                s=marker_size,
                marker=markers[i%len(markers)],
-               label=f"[{left:.0f}, {right:.0f})")
+               label=f"[{left:.3f}, {right:.3f})")
 handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], title="TOPS per Server", loc="upper right", markerscale=1.3, framealpha=1)
+ax.legend(handles[::-1], labels[::-1], ncol=1, title="Utilization", loc="upper right", markerscale=1.3, framealpha=1)
+
+
+# ax = axes[1][0]
+# feature = " [5]die_area"
+# _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+# for i in range(num_bins):
+#     left = bin_edges[i]
+#     right = bin_edges[i+1]
+#     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+#     ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                s=marker_size,
+#                marker=markers[i%len(markers)],
+#                label=f"[{left:.0f}, {right:.0f})")
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], title="Chip Area (mm2)", loc="upper right", markerscale=1.3, framealpha=1)
+
+# ax = axes[1][1]
+# feature = "tops/mb"
+# _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+# for i in range(num_bins):
+#     left = bin_edges[i]
+#     right = bin_edges[i+1]
+#     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+#     ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                s=marker_size,
+#                marker=markers[i%len(markers)],
+#                label=f"[{left:.3f}, {right:.3f})")
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], title="TOPS/MB", loc="upper right", markerscale=1.3, framealpha=1)
+
+# ax = axes[3][0]
+# feature = " [10]tops_per_server"
+# _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+# for i in range(num_bins):
+#     left = bin_edges[i]
+#     right = bin_edges[i+1]
+#     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+#     ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                s=marker_size,
+#                marker=markers[i%len(markers)],
+#                label=f"[{left:.0f}, {right:.0f})")
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], title="TOPS per Server", loc="upper right", markerscale=1.3, framealpha=1)
 
 # ax = axes[3][0]
 # feature = "t"
@@ -341,48 +470,19 @@ ax.legend(handles[::-1], labels[::-1], title="TOPS per Server", loc="upper right
 # handles, labels = ax.get_legend_handles_labels()
 # ax.legend(handles[::-1], labels[::-1], ncol=4, title="t", loc="upper right", markerscale=1.3, framealpha=1)
 
-ax = axes[3][1]
-feature = " [8]sram_per_server"
-_, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
-for i in range(num_bins):
-    left = bin_edges[i]
-    right = bin_edges[i+1]
-    series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
-    ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-               s=marker_size,
-               marker=markers[i%len(markers)],
-               label=f"[{left/1000:.0f}, {right/1000:.0f})")
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], title="GB per Server", loc="upper right", markerscale=1.3, framealpha=1)
-
-ax = axes[4][0]
-i = 0
-p_df = pareto_all.sort_values("p", ascending=True)
-for p in pd.unique(p_df["p"]):
-    series = p_df[p_df["p"] == p]
-    if not series.empty:
-        ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-                   s=marker_size,
-                   marker=markers[i%len(markers)],
-                   label=p)
-    i += 1
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], ncol=2, title="Pipeline Stages", loc="upper right", markerscale=1.3, framealpha=1)
-
-ax = axes[4][1]
-i = 0
-p_df = pareto_all.sort_values("batch", ascending=True)
-for batch in pd.unique(p_df["batch"]):
-    series = p_df[p_df["batch"] == batch]
-    if not series.empty:
-        ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-                   s=marker_size,
-                   marker=markers[i%len(markers)],
-                   label=batch)
-    i += 1
-
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], ncol=2, title="Batch Size", loc="upper right", markerscale=1.3, framealpha=1)
+# ax = axes[3][1]
+# feature = " [8]sram_per_server"
+# _, bin_edges = np.histogram(pareto_all[feature], bins=num_bins)
+# for i in range(num_bins):
+#     left = bin_edges[i]
+#     right = bin_edges[i+1]
+#     series = pareto_all[(pareto_all[feature] >= left) & (pareto_all[feature] < right)]
+#     ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
+#                s=marker_size,
+#                marker=markers[i%len(markers)],
+#                label=f"[{left/1000:.0f}, {right/1000:.0f})")
+# handles, labels = ax.get_legend_handles_labels()
+# ax.legend(handles[::-1], labels[::-1], title="GB per Server", loc="upper right", markerscale=1.3, framealpha=1)
 
 
 for ax_row in axes:
@@ -411,31 +511,8 @@ elif model == 'mtnlg':
 #     label = f"{batch}"
 #     plt.annotate(label, (x,y), textcoords='offset points', xytext=(0,5), ha='center', fontsize=8)
 # 
-# plt.legend(title="All TCO ($)")
+# plt.legend(title="All TCO ($)"
 
-# %%
-fig, axes = plt.subplots(1, 1, figsize=(8,5), dpi=300)
-ax = axes
-p_df = pareto_all.sort_values("batch", ascending=True)
-for batch in pd.unique(p_df["batch"]):
-    series = p_df[p_df["batch"] == batch]
-    if not series.empty:
-        ax.scatter(series["tco/token"]*1000, series["latency"]/1e3, 
-                   s=marker_size,
-                   # facecolors='none', 
-                   # edgecolor=colors[i%len(colors)], 
-                   marker=markers[i%len(markers)],
-                   label=batch)
-    i += 1
-handles, labels = ax.get_legend_handles_labels()
-ax.legend(handles[::-1], labels[::-1], ncol=1, title="Batch Size", loc="upper right", markerscale=1.3, framealpha=1)
-
-ax.set_xlabel("TCO per 1K tokens ($)")
-ax.set_ylabel("Latency (ms)")
-
-
-# %%
-pareto_all.head()
 
 # %%
 fig, axes = plt.subplots(1, 1, figsize=(10,6), dpi=300)
@@ -461,9 +538,6 @@ for index, data_point in pareto_all.iterrows():
     ax.annotate(label, (x,y), textcoords='offset points', xytext=(0,5), ha='center', fontsize=4)
 
 plt.show()
-# %%
-a = plt.hist(pareto_all["all_tco"], bins=5)
-print(a[1])
-pareto_all.sort_values("all_tco", ascending=True)
+
 # %%
 # RUN EVERYTHING BY HITTING 'Run Above'
