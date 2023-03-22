@@ -52,6 +52,8 @@ df['real_w'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['p
 df['tops/mb'] = df.apply(lambda row: row['tops_per_chip'] / row['sram_per_chip'], axis=1)
 # add all_area
 df['all_area'] = df.apply(lambda row: row['num_srvs']*row['chips_per_srv']*row[' [5]die_area'], axis=1)
+# add latency in ms
+df['latency_ms'] = df.apply(lambda row: row['latency']/1e3, axis=1)
 
 # print(df.columns)
 #     >  ['# [1]tech_node', ' [2]sram_per_asic', ' [3]tops_per_asic',
@@ -85,12 +87,21 @@ for batch_size in pd.unique(df["batch"]):
 
 plt.legend(title="Batch Size", loc="upper right", markerscale=20)
 
-# plt.ylim(bottom=3000, top=4000)
-# plt.xlim(left=1e2, right=20000)
-# condition = (df["batch"] == 2) & (df["p"] == 144) & (df['chips_per_srv']==64)
-# condition = (df[" [5]die_area"] == 750.00) & (df['chips_per_srv']==64) & (df["batch"] == 1) & (df["p"] == 144)
-# series = df[condition]
-# plt.scatter(x=series["all_tco/tput"], y=series["latency"], s=0.1)
+print("       Exploration Space:   ", df.shape[0])
+print(" ")
+print("Number of Server Designs:   ", len(pd.unique(df["srv_id"])))
+print("        Chips per Server:   ", f'{df["chips_per_srv"].min()}', '~', f'{df["chips_per_srv"].max()}')
+print("         Chip Size (mm2):   ", f'{df[" [5]die_area"].min() :.2f}', '~', f'{df[" [5]die_area"].max():.3f}')
+print("          Chip SRAM (MB):   ", f'{df["sram_per_chip"].min():.3f}', '~', f'{df["sram_per_chip"].max():.3f}')
+print("               Chip TOPS:   ", f'{df["tops_per_chip"].min():.3f}', '~', f'{df["tops_per_chip"].max():.3f}')
+print(" ")
+print("         Pipeline Stages:   ", f'{df["p"].min()}', '~', f'{df["p"].max()}')
+print(" Tensor Parallelism Size:   ", f'{df["t"].min()}', '~', f'{df["t"].max()}')
+
+print(" ")
+# print("           Hardware Cost:   ", f'{df["all_srv_cost"].min():,.0f}', '~', f'{df["all_srv_cost"].max():,.0f} $')
+print("         Total Power (W):   ", f'{df["real_w"].min():,.2f}', '~', f'{df["real_w"].max():,.0f}')
+print("                 TCO ($):   ", f'{df["all_tco"].min():,.0f}', '~', f'{df["all_tco"].max():,.0f}')
 
 # %%
 series.sort_values("latency", ascending=True)
@@ -112,7 +123,6 @@ pareto_n512  = pareto_front_filter_2d( df[df["batch"] ==  512], "all_tco/tput", 
 pareto_n1024 = pareto_front_filter_2d( df[df["batch"] == 1024], "all_tco/tput", "latency", )
 
 fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
-
 ax = axes
 
 ax.plot(pareto_n1["all_tco/tput"],    pareto_n1["latency"]  ,  linestyle='--', marker='o', markersize=5, label=1)
@@ -189,22 +199,33 @@ pareto_all = pareto_front_filter_2d(df, "tco/token", "latency", )
 pareto_all.sort_values("latency", ascending=True)
 latency_optimal = pareto_all.loc[pd.to_numeric(pareto_all['latency']).idxmax()]
 
-tpu_540B={"latency":[32, 45, 180], "chip_ms_per_token":[64,16*1.41, 8*1.41], "num_chips":[128, 64, 64], "batch":[64, 128, 1024]}
-tpu_price = 3.22 # per chip-hour
+tpu_price = 3.22 # per chip-hour, from google cloud
+tpu_tco = 0.12 # per chip-hour, from our TCO model. Did not consider HBM, not accurate.
+# from figure 1, decoding latency 
+# tpu_540B={"latency":[32, 45, 180], "chip_ms_per_token":[64,16*1.41, 8*1.41], "num_chips":[128, 64, 64], "batch":[64, 128, 1024]}
+# from figure 1 and table 2
+tpu_540B={
+          "num_chips":         [        64,        64,       64,        64], 
+          "batch":             [        64,       128,      512,      1024],
+          "latency":           [   1820/64,        45,  6000/64,       180], 
+          "tput":              [64*64/1.82, 128/0.045, 64*512/6, 1024/0.18], 
+          # "chip_ms_per_token": [64,  16*1.41, 8*1.41], 
+          }
 tpu={"tco/token":[], "latency":[]}
-for i in range(len(tpu_540B["latency"])):
+for i in range(3):
     tpu["latency"].append(tpu_540B["latency"][i] /1.7) # GPT3 estimates
-    tpu["tco/token"].append(tpu_540B["chip_ms_per_token"][i]*1000*(tpu_price/3600/1000) / 2.2) # GPT3 estimates
+    tpu["tco/token"].append(tpu_price*tpu_540B["num_chips"][i]/3600/tpu_540B["tput"][i]*1000 / 2.2) # GPT3 estimates
 
+gpu_price = 3.05 # per GPU per hour, from google cloud
+gpu_tco = 1.67 # per GPU per hour, from our TCO Model
 gpu_tput = [18]
 gpu_latency = [620]
 gpu_tflops = [70]
 gpu_num = [16]
-gpu_price = 3.05 # per GPU per hour
 gpu={"tco/token":[], "latency":[]}
 for i in range(len(gpu_tput)):
     gpu["latency"].append(gpu_latency[i])
-    gpu["tco/token"].append(gpu_price/3600/gpu_tput[i] * 1000)
+    gpu["tco/token"].append(gpu_tco/3600/gpu_tput[i] * 1000)
 
 fig, axes = plt.subplots(1, 1, figsize=(8,6), dpi=200)
 ax = axes

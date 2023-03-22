@@ -5,20 +5,28 @@ from opt_mapping import opt_mapping, generate_mappings
 if __name__ == '__main__': 
 
   hw_csv = '../asic_cloud_sim_v2/exploration.csv'
-  model_name = 'mtnlg'
-
-  gpt3 = {
-    'num_layers': 96,
-    'd': 12288,
-    'max_ctx_len': 2048,
-    'batch_size': 1,
-    'bytes_per_number': 2
-  }
+  model_name = 'gpt_1360B'
 
   gpt2 = {
     'num_layers': 48,
     'd': 1600,
     'max_ctx_len': 1024,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  tnlg = {
+    'num_layers': 78,
+    'd': 4256,
+    'max_ctx_len': 1024,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt3 = {
+    'num_layers': 96,
+    'd': 12288,
+    'max_ctx_len': 2048,
     'batch_size': 1,
     'bytes_per_number': 2
   }
@@ -31,7 +39,62 @@ if __name__ == '__main__':
     'bytes_per_number': 2
   }
 
-  all_models = {'gpt2': gpt2, 'gpt3': gpt3, 'mtnlg':mtnlg}
+  gpt3_ctx_8K = {
+    'num_layers': 96,
+    'd': 12288,
+    'max_ctx_len': 1024*8,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt3_ctx_32K = {
+    'num_layers': 96,
+    'd': 12288,
+    'max_ctx_len': 1024*32,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt3_ctx_128K = {
+    'num_layers': 96,
+    'd': 12288,
+    'max_ctx_len': 1024*128,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt_340B = {
+    'num_layers': 105,
+    'd': 128*128,
+    'max_ctx_len': 2048,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt_700B = {
+    'num_layers': 96,
+    'd': 96*128*2,
+    'max_ctx_len': 4096,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  gpt_1360B = {
+    'num_layers': 105,
+    'd': 128*128*2,
+    'max_ctx_len': 2048,
+    'batch_size': 1,
+    'bytes_per_number': 2
+  }
+
+  all_models = {'gpt2': gpt2, 'gpt3': gpt3, 'mtnlg':mtnlg, 'tnlg': tnlg,
+                'gpt3_ctx_8K':  gpt3_ctx_8K, 
+                'gpt3_ctx_32K': gpt3_ctx_32K, 
+                'gpt3_ctx_128K': gpt3_ctx_128K, 
+                'gpt_340B': gpt_340B,
+                'gpt_700B': gpt_700B,
+                'gpt_1360B': gpt_1360B,
+                }
 
   sys_spec = {
     'chips_per_pkg': 1,
