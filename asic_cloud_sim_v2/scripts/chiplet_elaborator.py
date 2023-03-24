@@ -7,7 +7,7 @@ import utils
 import math
 
 def chiplet_elaborator(design): 
-  [tech, lanes_per_server, IO_bandwidth, silicon_per_lane, chiplets_per_lane, mac_area_ratio] = design
+  [tech, lanes_per_server, IO_bandwidth, silicon_per_lane, chiplets_per_lane, mac_area_ratio, chip_id] = design
   
   asic_spec = {'tech_node':tech, 'lgc_vdd':0.8, 'sram_vdd':0.8, 'frequency': 1, 'other_area': 5.0, 'dram_count':0}
     
@@ -83,5 +83,5 @@ def chiplet_elaborator(design):
   
   extra_spec = utils.extra_specs_calculator(dc_spec, srv_spec, 
                                        dpw, max_die_power,
-                                       die_yield)
+                                       die_yield, chip_id)
   return asic_spec, srv_spec, dc_spec, extra_spec

@@ -282,29 +282,32 @@ def opt_mapping(sys, model, ts=None, opt_target='delay'):
       model['batch_size'] = batch
       all_mappings = generate_mappings(sys, model)
       for mapping in all_mappings:
-        micro_batch = 1
-        # latency, detail_delay = get_latency(sys, model, mapping, ts, None)
-        micro_batch_latency, detail_delay = get_latency(sys, model, mapping, micro_batch, ts, None)
-        critical_pipe_stage_delay = detail_delay[2]
-        if batch == 1:
-          latency = micro_batch_latency
-          tput = 1e6/latency
-        else:
-          latency = micro_batch_latency + critical_pipe_stage_delay*(batch/micro_batch)
-          squeeze_latency = max(micro_batch_latency, critical_pipe_stage_delay*(batch/micro_batch))
-          tput = 1e6/squeeze_latency * batch
+        # micro_batch = 1
+        for micro_batch in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]:
+          if micro_batch <= batch:
+            # latency, detail_delay = get_latency(sys, model, mapping, ts, None)
+            micro_batch_latency, detail_delay = get_latency(sys, model, mapping, micro_batch, ts, None)
+            critical_pipe_stage_delay = detail_delay[2]
+            if batch == 1:
+              latency = micro_batch_latency
+              tput = 1e6/latency
+            else:
+              latency = micro_batch_latency + critical_pipe_stage_delay*(batch/micro_batch)
+              squeeze_latency = max(micro_batch_latency, critical_pipe_stage_delay*(batch/micro_batch))
+              tput = 1e6/squeeze_latency * batch
 
-        mapping_batch = {'t': mapping['t_chip'], 'p': mapping['p'], 'srvs': mapping['all_srv'], 'batch': batch }
+            mapping_batch = {'t': mapping['t_chip'], 'p': mapping['p'], 'srvs': mapping['all_srv'], 
+                             'batch': batch, 'micro_batch':micro_batch }
 
-        if latency < best_latency:
-          best_latency = latency
-          best_latency_tput = tput
+            if latency < best_latency:
+              best_latency = latency
+              best_latency_tput = tput
 
-        if tput > best_tput:
-          best_tput = tput
-          best_tput_latency = latency
+            if tput > best_tput:
+              best_tput = tput
+              best_tput_latency = latency
 
-        all_results.append([mapping_batch, latency, detail_delay, tput])
+            all_results.append([mapping_batch, latency, detail_delay, tput])
 
   
   return best_latency, best_tput, all_results

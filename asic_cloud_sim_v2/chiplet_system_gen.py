@@ -8,12 +8,23 @@ def run(config):
 
 
   all_data = []
+  chip_id_dict = {}
+  chip_num = 0
   for silicon_per_lane in lane_silicon_options:
     for chiplets_per_lane in lane_chiplets_options:
+      chip_area = silicon_per_lane / chiplets_per_lane
       for mac_area_ratio in mac_area_ratio_options:
-        design = [tech, lanes_per_server, IO_bandwidth, silicon_per_lane, chiplets_per_lane, mac_area_ratio]
+        chip = f'{chip_area}_{mac_area_ratio}'
+        if chip in chip_id_dict:
+          chip_id = chip_id_dict[chip]
+        else:
+          chip_id = chip_num
+        design = [tech, lanes_per_server, IO_bandwidth, silicon_per_lane, chiplets_per_lane, mac_area_ratio, chip_id]
         results = chiplet_elaborator(design)
         if results != None:
+          if chip not in chip_id_dict:
+            chip_id_dict[chip] = chip_num
+            chip_num += 1
           all_data.append(list(results))
 
   o_file = open(config+'.csv', 'w')

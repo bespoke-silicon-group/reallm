@@ -1,4 +1,5 @@
 # %%
+# read all models
 real_models = ['gpt2', 'tnlg', 'gpt3', 'mtnlg']
 scale_models = ['gpt3', 'gpt_340B', 'gpt_700B', 'gpt_1360B']
 ctx_models = ['gpt3', 'gpt3_ctx_8K', 'gpt3_ctx_32K', 'gpt3_ctx_128K']
@@ -39,7 +40,7 @@ hw_csv = "../asic_cloud_sim_v2/exploration.csv"
 hw = pd.read_csv(hw_csv)
 
 dfs = {}
-for model in models_label:
+for model in real_models:
     all_csv = "../app_perf_sim_v2/"+model+"_all.csv"
     pd.set_option("display.max.columns", None)
     df = pd.read_csv(all_csv)
@@ -48,34 +49,35 @@ for model in models_label:
 
 # %%
 # add some data
-for model in dfs:
-    df = dfs[model]
-    df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']*row['utilization']) / row['tput'], axis=1)
-    # add $/tput
-    df['$/tput'] = df.apply(lambda row: row['all_srv_cost'] / row['tput'], axis=1)
-    # add all_tco/sec
-    life_time_years = 1.5
-    total_sec = life_time_years * 365 * 24 * 3600
-    df['all_tco/sec'] = df.apply(lambda row: row['all_tco'] / total_sec, axis=1)
-    # add tco/token
-    df['tco/token'] = df.apply(lambda row: row['all_tco/sec'] / row['tput'], axis=1)
-    # add real_w
-    df['real_w'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']*row['utilization']), axis=1)
-    # add tops/mb
-    df['tops/mb'] = df.apply(lambda row: row['tops_per_chip'] / row['sram_per_chip'], axis=1)
-    # add all_area
-    df['all_area'] = df.apply(lambda row: row['num_srvs']*row['chips_per_srv']*row[' [5]die_area'], axis=1)
-    # add latency in ms
-    df['latency_ms'] = df.apply(lambda row: row['latency']/1e3, axis=1)
-    # add 1/tput
-    df['1/tput'] = df.apply(lambda row: 1/row['tput'], axis=1)
+# for model in dfs:
+#     df = dfs[model]
+#     df['W/tput'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']*row['utilization']) / row['tput'], axis=1)
+#     # add $/tput
+#     df['$/tput'] = df.apply(lambda row: row['all_srv_cost'] / row['tput'], axis=1)
+#     # add all_tco/sec
+#     life_time_years = 1.5
+#     total_sec = life_time_years * 365 * 24 * 3600
+#     df['all_tco/sec'] = df.apply(lambda row: row['all_tco'] / total_sec, axis=1)
+#     # add tco/token
+#     df['tco/token'] = df.apply(lambda row: row['all_tco/sec'] / row['tput'], axis=1)
+#     df['tco/1ktoken'] = df.apply(lambda row: row['all_tco/sec'] / row['tput'] * 1000, axis=1)
+#     # add real_w
+#     df['real_w'] = df.apply(lambda row: (row['num_srvs']*row['chips_per_srv']*row['power_per_chip']*row['utilization']), axis=1)
+#     # add tops/mb
+#     df['tops/mb'] = df.apply(lambda row: row['tops_per_chip'] / row['sram_per_chip'], axis=1)
+#     # add all_area
+#     df['all_area'] = df.apply(lambda row: row['num_srvs']*row['chips_per_srv']*row[' [5]die_area'], axis=1)
+#     # add latency in ms
+#     df['latency_ms'] = df.apply(lambda row: row['latency']/1e3, axis=1)
+#     # add 1/tput
+#     df['1/tput'] = df.apply(lambda row: 1/row['tput'], axis=1)
 
 # %%
 # plot all data points
 
-for model in dfs:
+for model in real_models:
     df = dfs[model]
-    print("================== Model:", model)
+    print('========================', model, '======================')
     print("       Exploration Space:   ", df.shape[0])
     print(" ")
     print("Number of Server Designs:   ", len(pd.unique(df["srv_id"])))
@@ -92,13 +94,36 @@ for model in dfs:
     print("                 TCO ($):   ", f'{df["all_tco"].min():,.0f}', '~', f'{df["all_tco"].max():,.0f}')
     print(" ")
 
+# Optimal designs
+for model in real_models:
+    df = dfs[model]
+    tco_optimal = df.loc[pd.to_numeric(df['tco/token']).idxmin()]
+    # tput_optimal = df.loc[pd.to_numeric(df['tput']).idxmax()]
+    energy_optimal = df.loc[pd.to_numeric(df['W/tput']).idxmin()] 
+    latency_optimal = df.loc[pd.to_numeric(df['latency']).idxmin()]
+    features = {'chip_id': 'Chip ID', ' [5]die_area': 'Die Size (mm2)', 
+                'sram_per_chip': "SRAM per Chip (MB)", 'tops_per_chip': 'TOPS per Chip', 
+                'srv_id': 'Srv ID', 'chips_per_srv': 'Chips per Srv', 
+                'num_srvs': 'Num of Srvs', 'all_srv_cost': 'All CapEx ($)',
+                't': 'Tensor Para Size', 'p': 'Pipeline Para Size', 
+                'batch': 'Batch Size', 'micro_batch': 'Micro-Batch Size',
+                'latency_ms': 'Latency (ms)', 'W/tput': 'Joules/1K Tokens', 'tco/1ktoken': 'Cents/1K Tokens', 
+    }
+    print(models_label[model], ',   Latency Optimal,     Energy Optimal,      TCO Optimal')
+    for f in features:
+        if f == 'W/tput' or f == 'tco/1ktoken':
+            print(f'{features[f]}, {latency_optimal[f]*1e3}, {energy_optimal[f]*1e3}, {tco_optimal[f]*1e3}')
+        else:
+            print(f'{features[f]}, {latency_optimal[f]}, {energy_optimal[f]}, {tco_optimal[f]}')
+
+    print(" ")
 # %%
 # Latency vs TCO
 
 markers = ['<', 'p', 'D', 'D', 'o', 's', '^']
 fig, axes = plt.subplots(1, 1, figsize=(8,5), dpi=200)
 ax = axes
-for model in scale_models:
+for model in real_models:
     df = dfs[model]
     pareto_n1 = pareto_front_filter_2d(df, "all_tco", "latency_ms", )
     ax.plot(pareto_n1["all_tco"], pareto_n1["latency_ms"], linestyle='--', 
@@ -164,8 +189,8 @@ latency = 10000
 top_point = None
 for model in ctx_models:
     df = dfs[model]
-    pareto_all = pareto_front_filter_2d(df, "tco/token", "latency", )
-    ax.plot(pareto_all["tco/token"]*1000, pareto_all["latency"]/1e3, 
+    pareto_all = pareto_front_filter_2d(df, "tco/1ktoken", "latency_ms", )
+    ax.plot(pareto_all["tco/1ktoken"], pareto_all["latency_ms"], 
             linestyle='None',
             markeredgecolor='black', markeredgewidth=0.5,
             marker=markers.pop(), markersize=10, label=models_label[model])
@@ -173,14 +198,14 @@ for model in ctx_models:
 # color='salmon'
 # for model in ctx_models:
 #     df = dfs[model]
-#     pareto_all = pareto_front_filter_2d(df, "tco/token", "latency", )
-#     latency_optimal = pareto_all.loc[pd.to_numeric(pareto_all['latency']).idxmin()]
+#     pareto_all = pareto_front_filter_2d(df, "tco/1ktoken", "latency_ms", )
+#     latency_optimal = pareto_all.loc[pd.to_numeric(pareto_all['latency_ms']).idxmin()]
 
 #     if top_point == None:
-#         top_point = (latency_optimal["tco/token"]*1000, latency_optimal["latency_ms"]) 
+#         top_point = (latency_optimal["tco/1ktoken"], latency_optimal["latency_ms"]) 
 #         last_y = latency_optimal["latency_ms"] 
 #     else:
-#         ax.plot([latency_optimal["tco/token"]*1000, top_point[0]], 
+#         ax.plot([latency_optimal["tco/1ktoken"], top_point[0]], 
 #                 [latency_optimal["latency_ms"], latency_optimal["latency_ms"]],
 #                 linestyle=':', color=color)
 
@@ -202,18 +227,18 @@ for model in ctx_models:
 # right_point = None
 # for model in ctx_models[::-1]:
 #     df = dfs[model]
-#     pareto_all = pareto_front_filter_2d(df, "tco/token", "latency", )
-#     tco_optimal = pareto_all.loc[pd.to_numeric(pareto_all['tco/token']).idxmin()]
+#     pareto_all = pareto_front_filter_2d(df, "tco/1ktoken", "latency_ms", )
+#     tco_optimal = pareto_all.loc[pd.to_numeric(pareto_all['tco/1ktoken']).idxmin()]
 #     if right_point == None:
-#         right_point = (tco_optimal["tco/token"]*1000, tco_optimal["latency_ms"]) 
-#         last_x = tco_optimal["tco/token"]*1000
+#         right_point = (tco_optimal["tco/1ktoken"], tco_optimal["latency_ms"]) 
+#         last_x = tco_optimal["tco/1ktoken"]
 #     else:
-#         ax.plot([tco_optimal["tco/token"]*1000, tco_optimal["tco/token"]*1000], 
+#         ax.plot([tco_optimal["tco/1ktoken"], tco_optimal["tco/1ktoken"]], 
 #                 [tco_optimal["latency_ms"], right_point[1]],
 #                 linestyle=':', color=color)
 
 #         left  = (last_x, right_point[1])
-#         right = (tco_optimal["tco/token"]*1000, right_point[1])
+#         right = (tco_optimal["tco/1ktoken"], right_point[1])
 #         ax.annotate("", xy=left, xytext=right,
 #                     arrowprops=dict(arrowstyle="<->", color=color, linewidth=1))
 #         ax.text(math.sqrt(left[0]*right[0]), left[1], 
@@ -224,7 +249,7 @@ for model in ctx_models:
 #                            edgecolor='black',
 #                            facecolor=color)
 #                 )
-#         last_x = tco_optimal["tco/token"]*1000
+#         last_x = tco_optimal["tco/1ktoken"]
 
 
 ax.set_xlabel("TCO per 1K tokens ($)", fontsize=12)
@@ -236,6 +261,11 @@ ax.grid(which='both', c='whitesmoke')
 handles, labels = ax.get_legend_handles_labels()
 ax.legend(handles, labels, loc="upper right", fontsize=12)
 # %%
+df = dfs['gpt3']
+tput_optimal = df.loc[pd.to_numeric(df['tput']).idxmax()]
+token_price_optimal = df.loc[pd.to_numeric(df['tco/token']).idxmin()]
+print(tput_optimal)
+print(token_price_optimal)
 # %%
 # Throughput vs Energy
 

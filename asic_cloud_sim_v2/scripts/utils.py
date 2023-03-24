@@ -25,7 +25,7 @@ tco_header = ['life_time_tco',
               'SrvOpex', 'SrvPower', 'PUEOverhead']
 
 extra_header = ['cost_per_tops', 'watts_per_tops', 'tco_per_tops',
-                'max_die_power_per_server', 'die_yield']
+                'max_die_power_per_server', 'die_yield', 'chip_id']
 
 csv_header = [asic_header, srv_header, tco_header, extra_header]
 
@@ -51,7 +51,7 @@ def fprintData(data_list, o_file):
   o_file.write('\n')
 
 # selects extra specs to be saved
-def extra_specs_calculator (dc_spec, srv_spec, dpw, max_die_power, die_y):
+def extra_specs_calculator (dc_spec, srv_spec, dpw, max_die_power, die_y, chip_id):
   # Extra Specs
   extra_spec = {
     'pcb_cost'         : srv_spec['pcb_cost'],
@@ -70,7 +70,8 @@ def extra_specs_calculator (dc_spec, srv_spec, dpw, max_die_power, die_y):
     'cost_per_tops'    : srv_spec['server_cost']/srv_spec['tops_per_server'],
     'watts_per_tops'   : srv_spec['server_power']/srv_spec['tops_per_server'],
     'tco_per_tops'     : dc_spec['life_time_tco']/srv_spec['tops_per_server'],
-    'max_die_power_per_server': max_die_power * srv_spec['asics_per_server']
+    'max_die_power_per_server': max_die_power * srv_spec['asics_per_server'],
+    'chip_id'          : chip_id
   }
 
   return extra_spec
