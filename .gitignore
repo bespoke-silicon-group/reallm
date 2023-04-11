@@ -2,6 +2,7 @@ basejump_stl/
 bsg_cadenv/
 DVEfiles/
 out/
+results/
 .vscode/
 *.vpd
 *.swp
