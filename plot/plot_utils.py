@@ -102,8 +102,8 @@ def compare_gpu_tpu(models_df, plot_dir='results', ctx_len=2048):
                 }
 
     markers = ['<', 'p', 'D', 'D', 'o', 's', '^']
-    fig, axes = plt.subplots(1, 2, figsize=(10,4), dpi=200)
-    plt.tight_layout(pad=3.0, w_pad=0.2, h_pad=0.5)
+    fig, axes = plt.subplots(1, 2, figsize=(9,3.6), dpi=200)
+    plt.tight_layout(pad=3.0, w_pad=0.15, h_pad=0.5)
 
     # GPT-3
     ax = axes[0]
@@ -548,7 +548,7 @@ def p_sweep(models_df, models_label, ctx_len=2048, plot_dir='results'):
     import matplotlib.ticker as mtick
 
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 4.6), dpi=200)
-    plt.tight_layout(pad=3.0, w_pad=2., h_pad=0.85)
+    plt.tight_layout(pad=3.0, w_pad=2., h_pad=1.0)
 
     axes = [ax1, ax2, ax3, ax4]
 
@@ -590,7 +590,7 @@ def p_sweep(models_df, models_label, ctx_len=2048, plot_dir='results'):
 
     ax3.legend(lns, labs, loc='lower left', bbox_to_anchor=(-0.02, 0.25), fontsize=10)
 
-    fig.text(0.5, 0.055, "Pipeline Stages", ha='center', fontsize='14')
+    fig.text(0.5, 0.035, "Pipeline Stages", ha='center', fontsize='16')
     fig.text(0.01, 0.46, "TCO/1K Tokens ($)", va='center', rotation='vertical', fontsize='14', c='tab:blue')
     fig.text(0.98, 0.5, "Utilization", va='center', rotation=270, fontsize='14', c='tab:orange')
 

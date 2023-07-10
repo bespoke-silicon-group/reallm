@@ -73,6 +73,9 @@ plot-chip-size: $(OBJ_DIR)/models_df.pkl
 plot-batch-size: $(OBJ_DIR)/models_df.pkl
 	python plot/plot.py --target 'batch_size'
 
+plot-pipeline-size: $(OBJ_DIR)/models_df.pkl
+	python plot/plot.py --target 'pipeline_size'
+
 plot-design-choice: $(OBJ_DIR)/models_df.pkl hbm-software-evaluation
 	python plot/plot.py --target 'design_choice'
 

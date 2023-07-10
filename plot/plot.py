@@ -50,6 +50,8 @@ if __name__ == '__main__':
             chip_size(dfs, plot_dir=results_dir)
         elif target == 'batch_size':
             batch_size(dfs, models_label, plot_dir=results_dir)
+        elif target == 'pipeline_size':
+            p_sweep(dfs, models_label, plot_dir=results_dir)
         elif target == 'design_choice':
             hw = pd.read_csv(hw_csv)
             HBM_dfs = {}
