@@ -84,10 +84,12 @@ def design_memory(
 
 
 if __name__ == "__main__":
-    memory: MEMORY = design_memory(
-        area=100_000_000,
-        bandwidth=(16 * 4096),
-        word_width=16,
+    import sys
+    cap_MB: float = design_memory(
+        area=float(sys.argv[1]),
+        bandwidth=int(sys.argv[2]),
+        word_width=int(sys.argv[3]),
         vlsi_params=vlsi_7nm,
         available_srams=available_srams_7nm,
     )
+    print("Capacity in MB " + str(cap_MB))

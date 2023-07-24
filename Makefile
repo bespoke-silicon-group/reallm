@@ -1,6 +1,7 @@
+export MAGIC_NUMBERS_PATH = $(abspath ./chiplet_cloud_simulator_vlsi_numbers)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
 export ASIC_CLOUD_SCRIPTS_PATH = $(abspath ./hardware_exploration/scripts)
-export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(ASIC_CLOUD_SCRIPTS_PATH)
+export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(ASIC_CLOUD_SCRIPTS_PATH):$(MAGIC_NUMBERS_PATH)
 
 OBJ_DIR = results
 
@@ -12,29 +13,29 @@ $(OBJ_DIR):
 hardware-exploration: $(OBJ_DIR)/exploration.csv
 hbm-exploration: $(OBJ_DIR)/HBM_chiplet.csv
 
-$(OBJ_DIR)/exploration.csv: | $(OBJ_DIR) 
+$(OBJ_DIR)/exploration.csv: | $(OBJ_DIR)
 	python hardware_exploration/chiplet_system_gen.py --config 'exploration' --results-dir $(abspath $(OBJ_DIR))
 
-$(OBJ_DIR)/HBM_chiplet.csv: | $(OBJ_DIR) 
+$(OBJ_DIR)/HBM_chiplet.csv: | $(OBJ_DIR)
 	python hardware_exploration/chiplet_system_gen.py --config 'HBM_chiplet' --results-dir $(abspath $(OBJ_DIR))
 
 # Software Evaluation
 software-evaluation: software-evaluation-gpt2 software-evaluation-gpt3 software-evaluation-tnlg software-evaluation-palm
-software-evaluation-gpt2: $(OBJ_DIR)/gpt2_all.csv 
-software-evaluation-gpt3: $(OBJ_DIR)/gpt3_all.csv 
-software-evaluation-tnlg: $(OBJ_DIR)/tnlg_all.csv 
+software-evaluation-gpt2: $(OBJ_DIR)/gpt2_all.csv
+software-evaluation-gpt3: $(OBJ_DIR)/gpt3_all.csv
+software-evaluation-tnlg: $(OBJ_DIR)/tnlg_all.csv
 software-evaluation-palm: $(OBJ_DIR)/palm_all.csv
 
 hbm-software-evaluation: hbm-software-evaluation-gpt2 hbm-software-evaluation-gpt3 hbm-software-evaluation-tnlg hbm-software-evaluation-palm
-hbm-software-evaluation-gpt2: $(OBJ_DIR)/gpt2_all.csv 
-hbm-software-evaluation-gpt3: $(OBJ_DIR)/gpt3_all.csv 
-hbm-software-evaluation-tnlg: $(OBJ_DIR)/tnlg_all.csv 
+hbm-software-evaluation-gpt2: $(OBJ_DIR)/gpt2_all.csv
+hbm-software-evaluation-gpt3: $(OBJ_DIR)/gpt3_all.csv
+hbm-software-evaluation-tnlg: $(OBJ_DIR)/tnlg_all.csv
 hbm-software-evaluation-palm: $(OBJ_DIR)/palm_all.csv
 
-$(OBJ_DIR)/%_all.csv: $(OBJ_DIR)/exploration.csv 
+$(OBJ_DIR)/%_all.csv: $(OBJ_DIR)/exploration.csv
 	python software_evaluation/gen_mapping.py --model $* --hw-csv $< --results-dir $(abspath $(OBJ_DIR))
 
-$(OBJ_DIR)/%_HBM_chiplet.csv: $(OBJ_DIR)/HBM_chiplet.csv 
+$(OBJ_DIR)/%_HBM_chiplet.csv: $(OBJ_DIR)/HBM_chiplet.csv
 	python software_evaluation/gen_mapping.py --model $* --hw-csv $< --results-dir $(abspath $(OBJ_DIR))
 
 # Plot
@@ -47,7 +48,7 @@ exploration-info: $(OBJ_DIR)/models_df.pkl
 opt-designs: $(OBJ_DIR)/models_df.pkl
 	python plot/plot.py --target 'optimal_designs' > $(OBJ_DIR)/optimal_designs.txt
 
-plot-all: $(OBJ_DIR)/models_df.pkl $(OBJ_DIR)/HBM_chiplet.csv 
+plot-all: $(OBJ_DIR)/models_df.pkl $(OBJ_DIR)/HBM_chiplet.csv
 	python plot/plot.py --target 'compare_gpu_tpu'
 	python plot/plot.py --target 'asic_profit'
 	python plot/plot.py --target 'compare_memory'
@@ -90,4 +91,3 @@ clean-pdf:
 
 clean:
 	-rm -rf $(OBJ_DIR)
-
