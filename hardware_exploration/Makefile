@@ -1,7 +1,8 @@
-export SCRIPTS_PATH = $(abspath ./scripts)
-export PYTHONPATH := ${PYTHONPATH}:$(SCRIPTS_PATH)
+export MICRO_ARCH_PATH = $(abspath ./micro_arch_sim)
+export HW_STRUCTS_PATH = $(abspath ./structs)
+export PYTHONPATH := ${PYTHONPATH}:$(MICRO_ARCH_PATH)
 
-CONFIG = 'HBM_chiplet'
+CONFIG = 'exploration'
 
 all: gen
 

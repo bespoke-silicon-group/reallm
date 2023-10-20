@@ -80,7 +80,10 @@ def design_memory(
     # total_area = best_memory.area + best_noc_area
 
     # print((best_memory.bits/8/1024/1024) / (total_area/1000000))
-    return best_memory.bits / 8 / 1024 / 1024
+    if best_memory is None:
+        return None
+    else:
+        return best_memory.bits / 8 / 1024 / 1024
 
 
 if __name__ == "__main__":
