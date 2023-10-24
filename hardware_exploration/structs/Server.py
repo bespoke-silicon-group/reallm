@@ -30,7 +30,14 @@ class Server(Base):
 
     valid: Optional[bool] = None
 
+    tops: Optional[float] = None
+    sram_mb: Optional[float] = None # MByte
+
     constants: ServerConstants = ServerConstantsCommon
+
+    # for test
+    cost_dcdc: float = 0
+    cost_psu:  float = 0
 
     def update(self) -> None:
         self.num_packages = self.constants.SrvLanes * self.packages_per_lane
@@ -47,6 +54,9 @@ class Server(Base):
         self.cost = self._get_cost()
         self.tco = TCO(self.tdp, self.cost, self.constants.SrvLife)
 
+        self.tops = self.perf / 1e12
+        self.sram_mb = self.sram / 1e6
+
         if not self.too_hot():
             self.valid = True
         else:
@@ -57,7 +67,9 @@ class Server(Base):
 
     def _get_tdp(self) -> float:
         w_fan = self.constants.FanPower * self.constants.SrvLanes
-        w_dcdc = (self.package.tdp * self.num_packages + self.constants.APPPower) / self.constants.DCDCEfficiency
+        # This is a bug in the original code, 0.5 is the w_IO per chip. It should instead be
+        # w_dcdc = (self.package.tdp * self.num_packages + self.constants.APPPower) / self.constants.DCDCEfficiency
+        w_dcdc = (self.package.tdp * self.num_packages + self.constants.APPPower + 0.5) / self.constants.DCDCEfficiency
         output_of_psu = w_dcdc + w_fan
         server_power = output_of_psu / self.constants.PSUEfficiency
 
@@ -65,12 +77,11 @@ class Server(Base):
 
     def _get_cost(self) -> float:
         c_dcdc = self.constants.APPPower / 1.0
-        c_dcdc += (self.package.chip.tdp / self.package.chip.vdd) * self.num_chips
+        c_dcdc += (self.package.chip.core_tdp / self.package.chip.vdd) * self.num_chips
         if self.package.mem_3d:
             c_dcdc += (self.package.mem_3d.tdp / self.package.mem_3d.vdd) * self.num_chips
         if self.package.mem_side:
             c_dcdc += (self.package.mem_side.tdp / self.package.mem_side.vdd) * self.package.num_mem_side * self.num_packages
-        pass
         cost_dcdc = self.constants.DCDCCostPerAmp * c_dcdc
         cost_psu = self.tdp * self.constants.PSUCostPerW
 
@@ -95,6 +106,8 @@ class Server(Base):
                       cost_dcdc + \
                       cost_psu + \
                       system_cost
+        self.cost_dcdc = cost_dcdc
+        self.cost_psu = cost_psu
         
         return server_cost
 

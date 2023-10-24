@@ -35,7 +35,7 @@ class TCO(Base):
         # Electricity cost is in $/KWh, so 1000 is for K, and it calculates for a month
         self.srv_power = self.constants.ElectricityCost * self.constants.SrvAvgPwr / 1000 * 24 * 30 \
               * self.server_tdp * self.server_life * 12
-        self.pue_overhead = self.srv_power * (self.constants.PUE - 1.0) * self.server_tdp * self.server_life * 12
+        self.pue_overhead = self.srv_power * (self.constants.PUE - 1.0)
 
         # TCO portions dependent on inputs
         self.srv_amortization = self.server_cost

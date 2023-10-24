@@ -1,9 +1,9 @@
 from structs.Server import Server
 from typing import Any, Dict, List, Optional
 
-chip_header = ['sram', 
-               'perf',
-               'sram_bw',
+chip_header = ['sram_mb', 
+               'tops',
+               'sram_bw_TB_per_sec',
                'tdp',
                'area',
                'cost',
@@ -11,9 +11,9 @@ chip_header = ['sram',
 pkg_header = []
 
 srv_header = ['num_packages',
-              'sram',
+              'sram_mb',
               'tdp',
-              'perf',
+              'tops',
               'cost',
              ]
 
@@ -73,10 +73,18 @@ def extra_specs_calculator (server: Server) -> Dict[str, Any]:
     'cost_per_tops'    : server.cost / (server.perf / 1e12),
     'watts_per_tops'   : server.tdp / (server.perf / 1e12),
     'tco_per_tops'     : server.tco.total / (server.perf / 1e12),
-    'sram_density'     : server.package.chip.sram / 1e6 / server.package.chip.sram_area,
+    'sram_density'     : server.package.chip.sram_mb / server.package.chip.sram_area,
     'die_yield'        : server.package.chip.die_yield,
     'sparse_weight'    : False,
-    'chip_id'          : server.package.chip.chip_id
+    'chip_id'          : server.package.chip.chip_id,
+    'hs_max_power'     : server.hs.max_power,
+    'cost_all_package' : server.package.cost * server.num_packages,
+    'cost_all_hs'      : server.hs.cost * server.num_packages,
+    'cost_all_fans'    : server.constants.FanCost * server.constants.SrvLanes,
+    'cost_ethernet'    : server.constants.EthernetCost,
+    'cost_dcdc'        : server.cost_dcdc,
+    'cost_psu'         : server.cost_psu,
+    'system_cost'      : server.constants.PCBPartsCost + server.constants.ChassisCost + server.constants.PCBCost * 2
   }
 
   return extra_spec

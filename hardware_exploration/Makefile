@@ -9,6 +9,9 @@ all: gen
 gen:
 	python chiplet_system_gen.py --config $(CONFIG)
 
+test:
+	python chiplet_system_gen.py --config 'test'
+
 clean:
 	-rm -f *.tco
 	-rm -f *.csv

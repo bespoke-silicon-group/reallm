@@ -43,6 +43,11 @@ class Chip(Base):
    die_yield: Optional[float] = 0.0
    dies_per_wafer: Optional[int] = None
 
+   tops: Optional[float] = None
+   sram_mb: Optional[float] = None
+   sram_bw_TB_per_sec: Optional[float] = None
+   core_tdp: Optional[float] = None
+
    vdd: float = 0.8
 
    def update(self) -> None:
@@ -64,6 +69,9 @@ class Chip(Base):
       else:
          self.valid = False
 
+      self.tops = self.perf / 1e12
+      self.sram_bw_TB_per_sec = self.sram_bw / 1e12
+
    def update_using_area_ratio(self) -> None:
       side = math.sqrt(self.area)
       core_side = side - self.padring_width
@@ -82,7 +90,9 @@ class Chip(Base):
          # byte/s to bit/cycle, 1 byte is 8 bits
          sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
          sram_area_um2 = self.sram_area * 1e6
-         self.sram = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
+         self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
+         if self.sram_mb:
+            self.sram = self.sram_mb * 1e6
 
       self.tdp = self._get_tdp()
       self.cost = self._get_cost()
@@ -90,7 +100,8 @@ class Chip(Base):
       
    def update_using_perf_sram(self) -> None:
       # TODO: update the area and bw estimates using the micro_arch_sim
-      self.sram_area = self.sram * self.constants.sram_density
+      self.sram_mb = self.sram / 1e6
+      self.sram_area = self.sram_mb * self.constants.sram_density
       self.mac_area = self.perf * self.constants.macs_density
       mac_sram_area = self.sram_area + self.mac_area
       self.mac_ratio = self.mac_area / mac_sram_area
@@ -111,6 +122,7 @@ class Chip(Base):
 
    def _get_tdp(self) -> float:
       tdp = self.perf / 1e12 * self.constants.w_per_tops
+      self.core_tdp = tdp
       # for reproduction, should remove this later
       tdp += self.pkg2pkg_io.tdp
       return tdp

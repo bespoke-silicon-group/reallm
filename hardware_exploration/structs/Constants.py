@@ -38,8 +38,9 @@ class ServerConstants():
     # Chassis
     ChassisCost = 30.0        # $
     # Ethernet
-    EthernetCost = 100.0      # $ for 10 GigE
     # EthernetCost = 10.0     # $ for 1 GigE
+    # EthernetCost = 100.0    # $ for 10 GigE
+    EthernetCost = 450.0      # $ for 100 GigE
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
     SrvLanes = 8              # lanes per server
