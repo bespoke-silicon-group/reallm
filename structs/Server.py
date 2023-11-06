@@ -22,16 +22,17 @@ class Server(Base):
     hs: Optional[Heatsink] = None # heatsinks used, per package
 
     cost: Optional[float] = None # server cost
-    tco: Optional[TCO] = None # server tco at 
+    tco: Optional[TCO] = None # server tco at tdp
 
-    perf: Optional[float] = None # #OPS
-    sram: Optional[float] = None # Byte
-    dram: Optional[float] = None # Byte
+    perf: Optional[int] = None # #OPS
+    sram: Optional[int] = None # Byte
+    dram: Optional[int] = None # Byte
 
     valid: Optional[bool] = None
 
     tops: Optional[float] = None
     sram_mb: Optional[float] = None # MByte
+    total_mem: Optional[int] = None # sram and dram, Byte
 
     constants: ServerConstants = ServerConstantsCommon
 
@@ -56,6 +57,7 @@ class Server(Base):
 
         self.tops = self.perf / 1e12
         self.sram_mb = self.sram / 1e6
+        self.total_mem = self.sram + self.dram
 
         if not self.too_hot():
             self.valid = True

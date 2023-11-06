@@ -8,7 +8,7 @@ from .Constants import TCOConstants, TCOConstantsCommon
 class TCO(Base):
     server_tdp: float
     server_cost: float
-    server_life: float
+    server_life: float # in years
 
     dc_amortization: Optional[float] = None
     dc_interest: Optional[float] = None
@@ -20,8 +20,8 @@ class TCO(Base):
     srv_opex: Optional[float] = None
 
     total: Optional[float] = None
-    capex: Optional[float] = None
-    opex: Optional[float] = None # depends on the real utilization (power)
+    fix_part: Optional[float] = None
+    power_part: Optional[float] = None # depends on the real utilization (power)
 
     constants: TCOConstants = TCOConstantsCommon
 
@@ -43,9 +43,10 @@ class TCO(Base):
         self.srv_interest = evalTotalInterestPaid(self.server_cost, self.constants.InterestRate, self.server_life)
 
         # Accumulate costs
-        self.total = self.dc_amortization + self.dc_interest + self.dc_opex \
-                   + self.srv_amortization + self.srv_opex + self.srv_interest \
+        self.fix_part = self.srv_amortization + self.srv_interest + self.srv_opex
+        self.power_part = self.dc_amortization + self.dc_interest + self.dc_opex \
                    + self.srv_power + self.pue_overhead
+        self.total = self.fix_part + self.power_part
 
 def evalTotalInterestPaid(total_borrowing, annual_interest_rate, loan_period_year):
     num_of_payments = loan_period_year * 12

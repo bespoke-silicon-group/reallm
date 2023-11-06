@@ -12,7 +12,7 @@ class Package(Base):
     chip: Chip
     num_chips: int = 1 # number of chips per package
     mem_3d: Optional[Memory] = None # memory stacked on the top of the chip, can be SRAM or DRAM
-    mem_side: Optional[Memory] = None # memroy on the side of the chip, usually is HBM
+    mem_side: Optional[Memory] = None # memory on the side of the chip, usually is HBM
     num_mem_side: int = 0
 
     io: Optional[IO] = None # package to package links
@@ -29,6 +29,7 @@ class Package(Base):
     perf: Optional[float] = None # #OPS
     sram: Optional[float] = None # Byte
     dram: Optional[float] = None # Byte
+    total_mem: Optional[int] = None # sram and dram, Byte
 
     def update(self) -> None:
         self.io = replace(self.chip.pkg2pkg_io)
@@ -53,6 +54,8 @@ class Package(Base):
         else:
             self.heatsource_length = math.sqrt(self.chip.area)
         self.heatsource_width = self.heatsource_length
+
+        self.total_mem = self.sram + self.dram
 
         self._update_dimension()
         

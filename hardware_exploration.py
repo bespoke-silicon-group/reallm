@@ -6,7 +6,7 @@ from structs.IO import IO
 from utils.utils import to_csv
 from typing import Optional
 import multiprocessing
-from itertools import product
+import pickle
 
 def explore_servers(package: Package, packages_per_lane: int, io: IO) -> Optional[Server]:
   server = Server(package=package, packages_per_lane=packages_per_lane, io=io)
@@ -25,7 +25,7 @@ def run(config, results_dir):
     packages_per_lane_options = range(3, 21)
     chip_io = IO(io_type='p2p', num=4, bandwidth_per_io=12.5e9, 
                  area_per_io=0.3, tdp_per_io=0.125)
-    server_io = IO(io_type='s2s', num=2, bandwidth_per_io=10e9)
+    server_io = IO(io_type='s2s', num=2, bandwidth_per_io=12.5e9)
     
     server_specs = []
     for chip_area in chip_area_options:
@@ -49,20 +49,23 @@ def run(config, results_dir):
     for result in results:
       if result != None:
         servers.append(result)
-
+    # print results to csv file
     o_file_path = results_dir+'/'+config+'.csv'
     to_csv(o_file_path, servers)
+    # save results to pickle file
+    with open(results_dir+'/'+config+'.pkl', 'wb') as f:
+      pickle.dump(servers, f)
     print(f'Found {len(servers)} valid hardware designs.')
 
   elif config == 'test':
     chip_num = 0
-    chip_area_options = [100]
-    mac_area_ratio_options = [0.01]
-    operational_intensity_options = [1.0]
-    packages_per_lane_options = range(3, 6)
+    chip_area_options = [140]
+    mac_area_ratio_options = [0.16]
+    operational_intensity_options = [2.0]
+    packages_per_lane_options = range(17, 18)
     chip_io = IO(io_type='p2p', num=4, bandwidth_per_io=12.5e9, 
                  area_per_io=0.3, tdp_per_io=0.125)
-    server_io = IO(io_type='s2s', num=2, bandwidth_per_io=10e9)
+    server_io = IO(io_type='s2s', num=2, bandwidth_per_io=12.5e9)
     
     server_specs = []
     for chip_area in chip_area_options:
@@ -86,9 +89,12 @@ def run(config, results_dir):
     for result in results:
       if result != None:
         servers.append(result)
-
+    # print results to csv file 
     o_file_path = results_dir+'/'+config+'.csv'
-    to_csv(o_file_path, servers)
+    to_csv(o_file_path, servers) 
+    # save results to pickle file
+    with open(results_dir+'/'+config+'.pkl', 'wb') as f:
+      pickle.dump(servers, f)
     print(f'Found {len(servers)} valid hardware designs.')
 
 

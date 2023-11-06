@@ -14,7 +14,7 @@ class Chip(Base):
    chip2chip_io: Optional[IO] = None # I/Os to the other chips in the same package
 
    # To define a chip, you should either give the perf, sram and bandwidth, or area and mac_ratio and operational intensity
-   perf: Optional[float] = None # #OPS
+   perf: Optional[float] = None # flops per sec
    sram: Optional[float] = None # byte
    sram_bw: Optional[int] = None # byte/s
 
