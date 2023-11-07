@@ -15,22 +15,3 @@ The first phase is the hardware exploration flow which performs a bottom-up, LLM
 * Software Evaluation
 
 The second phase is the software evaluation flow which takes the realizable server design points along with a generative LLM specification to perform software optimized inference simulations and TCO estimations to find Pareto optimal Chiplet Cloud design points.
-
-## Flow Commands
-
-| Commands | |
-|----------------|-|
-| `make hardware-exploration`  | Run hardware exploration flow to generate Chiplet Cloud server designs. |
-| `make hbm-exploration`  | Run hardware exploration flow to generate TPUv4i-like HBM server designs. |
-| `make software-evaluation`  | Run software evaluation flow for Chiplet Cloud server designs on all models. |
-| `make hbm-software-evaluation`  | Run software evaluation flow for HBM server designs on all models. |
-| `make software-evaluation-%%`  | Run software evaluation flow for Chiplet Cloud server designs on model %% (e.g. gpt3). |
-
-## Plot Commands
-
-| Commands | |
-|----------------|-|
-| `make exploration-info`  | Get the information of explored data points. |
-| `make opt-designs`  | Get optimal design points for each model. |
-| `make plot-all`  | Generate all plots. |
-| `make plot-%%`  | Generate individual plot, check the plot targets in Makefile. |
