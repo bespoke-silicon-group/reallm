@@ -8,7 +8,7 @@ from structs.Model import Model
 from structs.System import System
 from structs.Server import Server
 from structs.Performance import Performance
-from models import gpt2, megatron, gpt3, gopher, mtnlg, bloom, palm, llama2
+from tests.models import gpt2, megatron, gpt3, gopher, mtnlg, bloom, palm, llama2
 
 def system_eval(server: Server, model: Model, num_servers: int, max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[Performance]:
     system = System(server=server, model=model, num_servers=num_servers, max_ctx_len_batch_1=max_ctx_len_batch_1, max_batch=max_batch, asplos_version=asplos_version)

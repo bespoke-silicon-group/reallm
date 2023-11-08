@@ -1,8 +1,9 @@
 export MAGIC_NUMBERS_PATH = $(abspath ./chiplet_cloud_simulator_vlsi_numbers)
 export MICRO_ARCH_PATH = $(abspath ./micro_arch_sim)
 export STRUCTS_PATH = $(abspath ./structs)
+export TESTS_PATH = $(abspath ./tests)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
-export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH)
+export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH):$(TESTS_PATH)
 
 OBJ_DIR = results
 

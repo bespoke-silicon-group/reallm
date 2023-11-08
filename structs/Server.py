@@ -41,31 +41,35 @@ class Server(Base):
     cost_psu:  float = 0
 
     def update(self) -> None:
-        self.num_packages = self.constants.SrvLanes * self.packages_per_lane
-        self.num_chips = self.num_packages * self.package.num_chips
-        self.core_tdp = self.num_packages * self.package.tdp
-        self.perf = self.package.perf * self.num_packages
-        self.sram = self.package.sram * self.num_packages
-        self.dram = self.package.dram * self.num_packages
-        self.tdp = self._get_tdp()
-        self.hs = Heatsink(heatsource_length=self.package.heatsource_length, 
-                           heatsource_width=self.package.heatsource_width, 
-                           packages_per_lane=self.packages_per_lane)
+        if self.check_area():
+            self.num_packages = self.constants.SrvLanes * self.packages_per_lane
+            self.num_chips = self.num_packages * self.package.num_chips
+            self.core_tdp = self.num_packages * self.package.tdp
+            self.perf = self.package.perf * self.num_packages
+            self.sram = self.package.sram * self.num_packages
+            self.dram = self.package.dram * self.num_packages
+            self.tdp = self._get_tdp()
+            self.hs = Heatsink(heatsource_length=self.package.heatsource_length, 
+                               heatsource_width=self.package.heatsource_width, 
+                               packages_per_lane=self.packages_per_lane)
 
-        self.cost = self._get_cost()
-        self.tco = TCO(self.tdp, self.cost, self.constants.SrvLife)
+            self.cost = self._get_cost()
+            self.tco = TCO(self.tdp, self.cost, self.constants.SrvLife)
 
-        self.tops = self.perf / 1e12
-        self.sram_mb = self.sram / 1e6
-        self.total_mem = self.sram + self.dram
+            self.tops = self.perf / 1e12
+            self.sram_mb = self.sram / 1e6
+            self.total_mem = self.sram + self.dram
 
-        if not self.too_hot():
-            self.valid = True
+            self.valid = self.check_thermal()
         else:
             self.valid = False
+    
+    def check_area(self) -> bool:
+        silicon_per_lane = (self.package.heatsource_length * self.package.heatsource_width) * self.packages_per_lane 
+        return (silicon_per_lane <= self.constants.LaneAreaMax) and (silicon_per_lane >= self.constants.LaneAreaMin)
 
-    def too_hot(self) -> bool:
-        return (not self.hs.valid) or (self.hs.max_power < self.package.tdp) or (self.constants.SrvMaxPower < self.core_tdp)
+    def check_thermal(self) -> bool:
+        return (self.hs.valid) and (self.hs.max_power >= self.package.tdp) and (self.constants.SrvMaxPower >= self.core_tdp)
 
     def _get_tdp(self) -> float:
         w_fan = self.constants.FanPower * self.constants.SrvLanes

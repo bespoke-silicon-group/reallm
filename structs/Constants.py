@@ -44,6 +44,8 @@ class ServerConstants():
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
     SrvLanes = 8              # lanes per server
+    LaneAreaMin = 400.0       # mm2
+    LaneAreaMax = 6000.0      # mm2
 
 @dataclass
 class TCOConstants():

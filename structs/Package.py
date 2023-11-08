@@ -31,6 +31,8 @@ class Package(Base):
     dram: Optional[float] = None # Byte
     total_mem: Optional[int] = None # sram and dram, Byte
 
+    valid: Optional[bool] = None
+
     def update(self) -> None:
         self.io = replace(self.chip.pkg2pkg_io)
         self.io.num = self.num_chips * self.chip.pkg2pkg_io.num
@@ -58,6 +60,12 @@ class Package(Base):
         self.total_mem = self.sram + self.dram
 
         self._update_dimension()
+
+        self.valid = self.check_area()
+    
+    def check_area(self) -> bool:
+        # TODO: add more physical layout constraints
+        return True
         
     def _update_dimension(self) -> None:
         # To CONFIRM!

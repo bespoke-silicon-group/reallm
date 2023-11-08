@@ -1,0 +1,126 @@
+from structs.Chip import Chip
+from structs.Package import Package
+from structs.Server import Server
+from structs.IO import IO
+from structs.Memory import Memory
+from typing import Optional, List
+from dataclasses import dataclass
+import multiprocessing
+
+def make_iterable(x):
+  if isinstance(x, List):
+    return x
+  else:
+    return [x]
+
+@dataclass
+class ChipPerfConfig:
+  # Not fully supported yet, need to update micro_arch_sim
+  perf: float | List[float]
+  sram: float | List[float]
+  sram_bw: int | List[int]
+
+@dataclass
+class ChipAreaConfig:
+  area: int | List[int]
+  mac_area_ratio: float | List[float]
+  operational_intensity: float | List[float]
+
+@dataclass
+class ChipConfig:
+  '''
+  To define a chip, you should either give the perf, sram and bandwidth, 
+  or area and mac_ratio and operational intensity
+  '''
+  core_config: ChipPerfConfig | ChipAreaConfig
+  pkg_io: IO | List[IO] # chip to chip IO between packages
+  chip_io: Optional[IO | List[IO]] = None# chip to chip IO in the same package
+
+  def explore(self) -> List[Chip]:
+    chips = []
+    chip_io_options = make_iterable(self.chip_io)
+    pkg_io_options = make_iterable(self.pkg_io)
+    num = 0
+    if isinstance(self.core_config, ChipAreaConfig):
+      area_options = make_iterable(self.core_config.area)
+      mac_area_ratio_options = make_iterable(self.core_config.mac_area_ratio)
+      operational_intensity_options = make_iterable(self.core_config.operational_intensity)
+      for area in area_options:
+        for mac_area_ratio in mac_area_ratio_options:
+          for operational_intensity in operational_intensity_options:
+            for chip_io in chip_io_options:
+              for pkg_io in pkg_io_options:
+                chip = Chip(chip_id=num, area=area, mac_ratio=mac_area_ratio, 
+                            operational_intensity=operational_intensity,
+                            chip2chip_io=chip_io, pkg2pkg_io=pkg_io)
+                if chip.valid:
+                  chips.append(chip)
+                  num += 1
+    else:
+      raise NotImplementedError
+    print(f'Found {num} valid chip designs.')
+    return chips
+  
+
+@dataclass
+class PackageConfig:
+  '''
+  Package configuration given a chip.
+  '''
+  num_chips: int | List[int]
+  mem_3d: Optional[Memory | List[Memory]] = None
+  mem_side: Optional[Memory | List[Memory]] = None
+  num_mem_side: int | List[int] = 0
+
+  def explore(self, chips: List[Chip]) -> List[Package]:
+    pkgs = []
+    num_chips_options = make_iterable(self.num_chips)
+    mem_3d_options = make_iterable(self.mem_3d)
+    mem_side_options = make_iterable(self.mem_side)
+    num_mem_side_options = make_iterable(self.num_mem_side)
+    num = 0
+    for chip in chips:
+      for num_chips in num_chips_options:
+        for mem_3d in mem_3d_options:
+          for mem_side in mem_side_options:
+            for num_mem_side in num_mem_side_options:
+              pkg = Package(chip=chip, num_chips=num_chips, mem_3d=mem_3d, mem_side=mem_side, num_mem_side=num_mem_side)
+              if pkg.valid:
+                pkgs.append(pkg)    
+                num += 1
+    print(f'Found {num} valid package designs.')
+    return pkgs
+
+@dataclass
+class ServerConfig:
+  '''
+  Server configuration given a package.
+  '''
+  packages_per_lane: int | List[int]
+  server_io: IO | List[IO]
+
+  def explore(self, pkgs: List[Package]) -> List[Server]:
+    packages_per_lane_options = make_iterable(self.packages_per_lane)
+    server_io_options = make_iterable(self.server_io)
+    srv_specs = []
+    for pkg in pkgs:
+      for packages_per_lane in packages_per_lane_options:
+        for server_io in server_io_options:
+          srv_specs.append((pkg, packages_per_lane, server_io))
+    num_cores = multiprocessing.cpu_count()
+    with multiprocessing.Pool(processes=num_cores) as pool:
+      results = pool.starmap(self._eval_server, srv_specs)
+
+    valid_servers = [srv for srv in results if srv != None]
+    print(f'Found {len(valid_servers)} valid server designs.')
+
+    return valid_servers
+  
+  def _eval_server(self, pkg: Package, packages_per_lane: int, server_io: IO) -> Optional[Server]:
+    srv = Server(package=pkg, 
+                 packages_per_lane=packages_per_lane, 
+                 io=server_io)
+    if srv.valid:
+      return srv
+    else:
+      return None
