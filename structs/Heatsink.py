@@ -66,6 +66,8 @@ class Heatsink(Base):
             self.valid = True
             self.cost = self._get_cost(hs_spec)
             self.max_power = hs_spec['q_asic']
+            # TODO: FIX THIS LATER, consider more advanced air cooling
+            # self.max_power = hs_spec['q_asic'] * 1.5
             self.fin_height = hs_spec['fin_height']
             self.fin_thermal_cond = hs_spec['fin_thermal_cond'] 
             self.fin_thickness = hs_spec['fin_thickness']

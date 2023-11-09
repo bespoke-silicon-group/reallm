@@ -32,6 +32,7 @@ class Package(Base):
     total_mem: Optional[int] = None # sram and dram, Byte
 
     valid: Optional[bool] = None
+    invalid_reason: Optional[str] = None
 
     def update(self) -> None:
         self.io = replace(self.chip.pkg2pkg_io)
@@ -65,7 +66,11 @@ class Package(Base):
     
     def check_area(self) -> bool:
         # TODO: add more physical layout constraints
-        return True
+        if True:
+            return True
+        else:
+            self.invalid_reason = 'Package area violation'
+            return False
         
     def _update_dimension(self) -> None:
         # To CONFIRM!

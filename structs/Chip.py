@@ -5,11 +5,12 @@ from .Constants import ChipConstants, ChipConstants7nm
 from .Base import Base
 from .IO import IO
 from micro_arch_sim.design_memory import design_memory
+from micro_arch_sim.design_memory_return_area import design_memory_return_area
 from micro_arch_sim.magic_numbers import available_srams_7nm, vlsi_7nm
 
 @dataclass
 class Chip(Base):
-   chip_id: int
+   chip_id: int | str
    pkg2pkg_io: IO  # I/Os to the other package
    chip2chip_io: Optional[IO] = None # I/Os to the other chips in the same package
 
@@ -30,6 +31,7 @@ class Chip(Base):
    core_area_ratio: float = 0.7
 
    valid: Optional[bool] = None
+   invalid_reason: Optional[str] = None
 
    tdp: Optional[float] = None # Watts
    cost: Optional[float] = None # $
@@ -61,16 +63,18 @@ class Chip(Base):
       elif self.area and self.mac_ratio:
          self.update_using_area_ratio()
       else:
-         print('To define a Chip class, please either input perf and sram, or area and mac_ratio')
          self.valid = False
-         
-      if self.sram and not self.too_hot() and not self.too_big():
-         self.valid = True
-      else:
-         self.valid = False
-
-      self.tops = self.perf / 1e12
-      self.sram_bw_TB_per_sec = self.sram_bw / 1e12
+         self.invalid_reason = 'Wrong chip input configuration'
+      
+      if self.sram:
+         if self.check_area():
+            self.tdp = self._get_tdp()
+            self.power_density = self.tdp / self.area
+            if self.check_thermal():
+               self.valid = True
+               self.cost = self._get_cost()
+               self.tops = self.perf / 1e12
+               self.sram_bw_TB_per_sec = self.sram_bw / 1e12
 
    def update_using_area_ratio(self) -> None:
       side = math.sqrt(self.area)
@@ -79,7 +83,8 @@ class Chip(Base):
       mac_sram_area = core_area * self.core_area_ratio - self.io_area - self.other_area
       if mac_sram_area < 0.1:
          # it generates some unreasonable designs when this is too small
-         print('Die size too small! Not enough area for MACs and SRAM')
+         self.invalid_reason = f'Die size {self.area} mm2 too small! Not enough area for MACs and SRAM'
+         self.valid = False
       else:
          self.sram_area = mac_sram_area * (1 - self.mac_ratio)
          self.mac_area = mac_sram_area - self.sram_area
@@ -93,16 +98,16 @@ class Chip(Base):
          self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
          if self.sram_mb:
             self.sram = self.sram_mb * 1e6
+         else:
+            self.invalid_reason = f'Can not find a valid SRAM design for {self.sram_area} mm2 and {self.sram_bw/1e12} TB/s'
+            self.valid = False
 
-      self.tdp = self._get_tdp()
-      self.cost = self._get_cost()
-      self.power_density = self.tdp / self.area
-      
    def update_using_perf_sram(self) -> None:
-      # TODO: update the area and bw estimates using the micro_arch_sim
       self.sram_mb = self.sram / 1e6
-      self.sram_area = self.sram_mb * self.constants.sram_density
-      self.mac_area = self.perf * self.constants.macs_density
+      sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
+      sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
+      self.sram_area = sram_area_um2 / 1e6
+      self.mac_area = self.perf / 1e12 * self.constants.macs_density
       mac_sram_area = self.sram_area + self.mac_area
       self.mac_ratio = self.mac_area / mac_sram_area
       core_area = (mac_sram_area + self.io_area + self.other_area) / self.core_area_ratio
@@ -110,16 +115,22 @@ class Chip(Base):
       side = core_side + self.padring_width
       self.area = side * side
 
-      self.tdp = self._get_tdp()
-      self.cost = self._get_cost()
-      self.power_density = self.tdp / self.area
+   def check_area(self) -> bool:
+      if self.area <= self.constants.max_die_area:
+         return True
+      else:
+         self.valid = False
+         self.invalid_reason = f'Chip area {self.area} is too large'
+         return False
 
-   def too_hot(self) -> bool:
-      return (self.power_density > self.constants.max_power_density)
-
-   def too_big(self) -> bool:
-      return (self.area > self.constants.max_die_area)
-
+   def check_thermal(self) -> bool:
+      if self.power_density <= self.constants.max_power_density:
+         return True
+      else:
+         self.valid = False
+         self.invalid_reason = f'Chip power density {self.power_density} W/mm2 is too high'
+         return False
+   
    def _get_tdp(self) -> float:
       tdp = self.perf / 1e12 * self.constants.w_per_tops
       self.core_tdp = tdp

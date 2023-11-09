@@ -4,8 +4,11 @@ from dataclasses import dataclass
 class ChipConstants():
     # SRAM density mm2/MB, data from real implementations
     sram_density: float = 0.45
-    # MACs density mm2/Tera BF16 ops, data from real implementations
-    macs_density: float = 2.65
+    # MACs density mm2/Tera BF16 ops
+    macs_density: float = 2.65 # data from whole chip implementations
+    # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
+    # TPUv4i: 100mm2 MXU for 138TOPS --> 0.72mm2/TOPS
+    # macs_density: float = 1.0
     # Power Model, W/Tera BF16 ops
     w_per_tops: float = 1.3
 
@@ -43,7 +46,6 @@ class ServerConstants():
     EthernetCost = 450.0      # $ for 100 GigE
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
-    SrvLanes = 8              # lanes per server
     LaneAreaMin = 400.0       # mm2
     LaneAreaMax = 6000.0      # mm2
 
