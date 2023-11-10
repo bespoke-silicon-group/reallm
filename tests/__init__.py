@@ -1,1 +1,0 @@
-from .sram_only_single_chip_configs import chip_config, package_config, server_config

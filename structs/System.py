@@ -72,9 +72,9 @@ class System(Base):
         # TODO: support weight or KV cache in 3D memory
         if self.server.package.mem_3d:
             raise NotImplementedError('3D memory or side memory is not supported yet.')
-        if self.server.package.mem_side:
-            self.weight_bw_per_chip = self.server.package.mem_side.bandwidth * self.server.package.num_mem_side / self.server.package.num_chips
-            self.kv_bw_per_chip = self.server.package.mem_side.bandwidth * self.server.package.num_mem_side / self.server.package.num_chips
+        if self.server.package.hbm:
+            self.weight_bw_per_chip = self.server.package.hbm.total_bandwidth / self.server.package.num_chips
+            self.kv_bw_per_chip = self.server.package.hbm.total_bandwidth / self.server.package.num_chips
         else:
             self.weight_bw_per_chip = self.server.package.chip.sram_bw
             self.kv_bw_per_chip = self.server.package.chip.sram_bw

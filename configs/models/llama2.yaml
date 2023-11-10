@@ -1,0 +1,6 @@
+Model:
+  name: 'llama2'
+  num_layers: 80
+  d: 8192
+  num_heads: 64
+  heads_per_kv_cache: 8 

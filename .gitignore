@@ -3,6 +3,7 @@ bsg_cadenv/
 DVEfiles/
 out/
 results/
+outputs/
 .vscode/
 *.vpd
 *.swp

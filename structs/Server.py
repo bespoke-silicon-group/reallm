@@ -103,9 +103,9 @@ class Server(Base):
         c_dcdc = self.constants.APPPower / 1.0
         c_dcdc += (self.package.chip.core_tdp / self.package.chip.vdd) * self.num_chips
         if self.package.mem_3d:
-            c_dcdc += (self.package.mem_3d.tdp / self.package.mem_3d.vdd) * self.num_chips
-        if self.package.mem_side:
-            c_dcdc += (self.package.mem_side.tdp / self.package.mem_side.vdd) * self.package.num_mem_side * self.num_packages
+            raise NotImplementedError('3D memory is not supported yet')
+        if self.package.hbm:
+            c_dcdc += (self.package.hbm.total_tdp / self.package.hbm.vdd) * self.num_packages
         cost_dcdc = self.constants.DCDCCostPerAmp * c_dcdc
         cost_psu = self.tdp * self.constants.PSUCostPerW
 

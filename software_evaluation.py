@@ -1,14 +1,10 @@
-import argparse
-import pickle
-import math
-import time
+import argparse, pickle, math, time, os, yaml
 import multiprocessing
 from typing import Optional
 from structs.Model import Model
 from structs.System import System
 from structs.Server import Server
 from structs.Performance import Performance
-from tests.models import gpt2, megatron, gpt3, gopher, mtnlg, bloom, palm, llama2
 
 def system_eval(server: Server, model: Model, num_servers: int, max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[Performance]:
     system = System(server=server, model=model, num_servers=num_servers, max_ctx_len_batch_1=max_ctx_len_batch_1, max_batch=max_batch, asplos_version=asplos_version)
@@ -20,14 +16,14 @@ def system_eval(server: Server, model: Model, num_servers: int, max_ctx_len_batc
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str)
-    parser.add_argument('--hw-pkl', type=str)
+    parser.add_argument('--hardware', type=str)
     parser.add_argument('--weight-sparsity', type=str, default='0')
     parser.add_argument('--results-dir', type=str)
-    parser.add_argument('--verbose', type=bool, default=False)
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
-    model_name = args.model
-    hw_pkl = args.hw_pkl
+    model_path = args.model
+    hw_pkl = args.hardware
     results_dir = args.results_dir
     if args.weight_sparsity != '0':
         weight_sparsity = float(int(args.weight_sparsity) / 100)
@@ -35,10 +31,13 @@ if __name__ == '__main__':
         weight_sparsity = 0.0
     verbose = args.verbose
     
+    with open(model_path, 'rb') as f:
+        model_config = yaml.safe_load(f)
+        model_name = model_config['Model']['name']
+        model = Model(**model_config['Model'])
+
     print('Generated design points for:', model_name)
-    
-    all_models = [gpt2, megatron, gpt3, gopher, mtnlg, bloom, palm, llama2]
-    model = [m for m in all_models if m.name == model_name][0]
+
     num_servers = 64
     max_ctx_len_batch_1 = 2048 * 128
     max_batch = 1024

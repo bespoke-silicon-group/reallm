@@ -5,15 +5,14 @@ import math
 from .Base import Base
 from .IO import IO
 from .Chip import Chip
-from .Memory import Memory
+from .Memory import Memory, HBM
 
 @dataclass
 class Package(Base):
     chip: Chip
     num_chips: int = 1 # number of chips per package
     mem_3d: Optional[Memory] = None # memory stacked on the top of the chip, can be SRAM or DRAM
-    mem_side: Optional[Memory] = None # memory on the side of the chip, usually is HBM
-    num_mem_side: int = 0
+    hbm: Optional[HBM] = None # memory on the side of the chip, usually is HBM
 
     io: Optional[IO] = None # package to package links
 
@@ -45,15 +44,16 @@ class Package(Base):
         self.dram = 0.0
 
         if self.mem_3d:
-            self.tdp += (self.num_chips * self.mem_3d.tdp)
-            if self.mem_3d.mem_type == '3d_dram':
-                self.dram += (self.num_chips * self.mem_3d.size)
-            elif self.mem_3d.mem_type == '3d_sram':
-                self.sram += (self.num_chips * self.mem_3d.size)
-        if self.mem_side:
-            self.tdp += (self.num_mem_side * self.mem_side.tdp)
-            self.dram += (self.num_mem_side * self.mem_side.size)
-            self.heatsource_length = math.sqrt(self.chip.area + self.mem_side.area * self.num_mem_side)
+            raise NotImplementedError('3D memory is not supported yet')
+            # self.tdp += (self.num_chips * self.mem_3d.tdp)
+            # if self.mem_3d.mem_type == '3d_dram':
+            #     self.dram += (self.num_chips * self.mem_3d.size)
+            # elif self.mem_3d.mem_type == '3d_sram':
+            #     self.sram += (self.num_chips * self.mem_3d.size)
+        if self.hbm:
+            self.tdp += self.hbm.total_tdp
+            self.dram += self.hbm.total_bytes
+            self.heatsource_length = math.sqrt(self.chip.area + self.hbm.total_area)
         else:
             self.heatsource_length = math.sqrt(self.chip.area)
         self.heatsource_width = self.heatsource_length
@@ -74,8 +74,8 @@ class Package(Base):
         
     def _update_dimension(self) -> None:
         # To CONFIRM!
-        if self.mem_side:
-            self.area = (self.chip.area + self.mem_side.area * self.num_mem_side) / 0.18
+        if self.hbm:
+            self.area = (self.chip.area + self.hbm.total_area) / 0.18
         else:
             self.area = self.chip.area / 0.18
         self.length = math.sqrt(self.area)
@@ -84,9 +84,9 @@ class Package(Base):
     def _get_cost(self) -> float:
         total_cost = self.num_chips * self.chip.cost
         if self.mem_3d:
-            total_cost += (self.num_chips * self.mem_3d.cost)
-        if self.mem_side:
-            total_cost += (self.num_mem_side * self.mem_side.cost) 
+            raise NotImplementedError('3D memory is not supported yet')
+        if self.hbm:
+            total_cost += self.hbm.total_cost
         total_cost += self._eval_package_cost()
         return total_cost
     

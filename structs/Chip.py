@@ -24,11 +24,19 @@ class Chip(Base):
    operational_intensity: Optional[float] = None # ops per sram read
 
    tech: str = '7nm'
+   # MACs density mm2/Tera BF16 ops
+   macs_density: float = 2.65 # data from whole chip implementations
+   # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
+   # TPUv4i: 100mm2 MXU for 138TOPS --> 0.72mm2/TOPS
+   # macs_density: float = 1.0
+   # Power Model, W/Tera BF16 ops
+   w_per_tops: float = 1.3
+   padring_width: float = 0.35
+   core_area_ratio: float = 0.7
+   other_area: float = 0.0 # chip area except SRAM and compute units
    freq: float = 1e9 # Hz
    bytes_per_word: int = 2 # bfloat or fp16
    constants: ChipConstants = ChipConstants7nm
-   padring_width: float = 0.35
-   core_area_ratio: float = 0.7
 
    valid: Optional[bool] = None
    invalid_reason: Optional[str] = None
@@ -37,7 +45,6 @@ class Chip(Base):
    cost: Optional[float] = None # $
    power_density: Optional[float] = None # Watts/mm2
 
-   other_area: float = 0.0 # chip area except SRAM and compute units
    io_area: Optional[float] = None
    sram_area: Optional[float] = None
    mac_area: Optional[float] = None
@@ -88,7 +95,7 @@ class Chip(Base):
       else:
          self.sram_area = mac_sram_area * (1 - self.mac_ratio)
          self.mac_area = mac_sram_area - self.sram_area
-         self.perf = self.mac_area / self.constants.macs_density * 1e12
+         self.perf = self.mac_area / self.macs_density * 1e12
          # operational_intensity is the num of MACs per weight
          # 1 MAC = 2 FLOPS, 1 weight = 2 byte
          self.sram_bw = self.perf / 2 / self.operational_intensity * self.bytes_per_word
@@ -107,7 +114,7 @@ class Chip(Base):
       sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
       sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
       self.sram_area = sram_area_um2 / 1e6
-      self.mac_area = self.perf / 1e12 * self.constants.macs_density
+      self.mac_area = self.perf / 1e12 * self.macs_density
       mac_sram_area = self.sram_area + self.mac_area
       self.mac_ratio = self.mac_area / mac_sram_area
       core_area = (mac_sram_area + self.io_area + self.other_area) / self.core_area_ratio
@@ -132,7 +139,7 @@ class Chip(Base):
          return False
    
    def _get_tdp(self) -> float:
-      tdp = self.perf / 1e12 * self.constants.w_per_tops
+      tdp = self.perf / 1e12 * self.w_per_tops
       self.core_tdp = tdp
       # for reproduction, should remove this later
       tdp += self.pkg2pkg_io.tdp

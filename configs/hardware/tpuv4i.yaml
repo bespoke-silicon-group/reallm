@@ -1,0 +1,42 @@
+Name: tpuv4i 
+
+Chip:
+  chip_id: 'tpuv4i'
+  perf: # 138 TOPS
+    - 138000000000000
+  sram: # 144 MB
+    - 144000000
+  sram_bw: # 2 TB/s
+    - 2000000000000
+  macs_density: # mm2/TOPS
+    - 0.72
+  other_area: # mm2
+    - 200
+  core_area_ratio:
+    - 0.95
+  pkg2pkg_io:
+    io_type: 'p2p'
+    num: 4
+    bandwidth_per_io: 25000000000
+    area_per_io: 0.3
+    tdp_per_io: 0.125
+
+Package:
+  num_chips: 1
+  hbm:
+    num_stacks: 1
+    stack_bytes: 
+     - 8589934592 # 8 GB
+    stack_bandwidth: 
+     - 659277479936 # 614 GB/s
+    stack_cost: 
+     - 60 # $120/16GB
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 2
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 12500000000
+
