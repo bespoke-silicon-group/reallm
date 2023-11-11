@@ -9,6 +9,7 @@ from .Memory import Memory, HBM
 
 @dataclass
 class Package(Base):
+    package_id: int
     chip: Chip
     num_chips: int = 1 # number of chips per package
     mem_3d: Optional[Memory] = None # memory stacked on the top of the chip, can be SRAM or DRAM

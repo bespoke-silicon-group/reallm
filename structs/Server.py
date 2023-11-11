@@ -10,6 +10,7 @@ from .Constants import ServerConstants, ServerConstantsCommon
 
 @dataclass
 class Server(Base):
+    server_id: int
     package: Package
     packages_per_lane: int # number of packages per lan
     io: IO # server to server links

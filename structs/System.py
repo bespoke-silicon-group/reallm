@@ -16,9 +16,10 @@ class System(Base):
     num_servers: Optional[int] = None # number of servers
     kv_cache_ratio: Optional[float] = None # kv cache ratio of the total memory
     max_ctx_len_batch_1: Optional[int] = None # max context length at batch size 1
+    max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    prefill_eval_ctx_len: int = 2048
+    prefill_eval_ctx_len: int = 1024
     generate_eval_prefill_len: int = 128
     generate_eval_generate_len: int = 128
 
@@ -56,16 +57,19 @@ class System(Base):
                 # if the number of servers is not provided, we will use the total memory to derive it
                 self.num_servers = math.ceil(required_mem / self.server.total_mem)
             self.total_mem = self.num_servers * self.server.total_mem
-        # udpate the kv cache ratio using the number of servers
-        elif self.num_servers:
+        # udpate the kv cache ratio using the number of servers, or max TCO
+        elif self.num_servers or self.max_tco:
+            if not self.num_servers:
+                self.num_servers = math.ceil(self.max_tco / self.server.tco.total)
             self.total_mem = self.num_servers * self.server.total_mem
             if self.total_mem < self.model.model_size_byte:
                 return False
         else:
-            raise ValueError('Please provide one of kv_cache_ratio, max_ctx_len_batch_a or num_servers.')
+            raise ValueError('Please provide one of kv_cache_ratio, max_ctx_len_batch_a, num_servers or max_tco.')
         self.kv_cache_ratio = 1 - self.model.model_size_byte / self.total_mem
         kv_cache_mem = self.kv_cache_ratio * self.total_mem
         self.max_ctx_len_batch_1 = math.floor(kv_cache_mem / self.model.kv_cache_size_per_token_byte)
+        self.max_tco = self.server.tco.total * self.num_servers
         self.num_packages = self.num_servers * self.server.num_packages
         self.num_chips = self.num_servers * self.server.num_chips
 

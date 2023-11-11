@@ -6,10 +6,10 @@ from structs.System import System
 from structs.Server import Server
 from structs.Performance import Performance
 
-def system_eval(server: Server, model: Model, num_servers: int, max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[Performance]:
+def system_eval(server: Server, model: Model, num_servers: int, max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[tuple[Performance, Performance]]:
     system = System(server=server, model=model, num_servers=num_servers, max_ctx_len_batch_1=max_ctx_len_batch_1, max_batch=max_batch, asplos_version=asplos_version)
     if system.valid:
-        return system.generate_throughput_opt_perf
+        return (system.generate_throughput_opt_perf, system.prefill_latency_opt_perf)
     else:
         return None
 
@@ -17,58 +17,48 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str)
     parser.add_argument('--hardware', type=str)
+    parser.add_argument('--max-num-servers', type=int, default=128)
+    parser.add_argument('--max-ctx-len-batch-1', type=int, default=2048 * 128)
+    parser.add_argument('--max-batch', type=int, default=1024)
     parser.add_argument('--weight-sparsity', type=str, default='0')
     parser.add_argument('--results-dir', type=str)
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
-    model_path = args.model
-    hw_pkl = args.hardware
-    results_dir = args.results_dir
-    if args.weight_sparsity != '0':
-        weight_sparsity = float(int(args.weight_sparsity) / 100)
-    else:
-        weight_sparsity = 0.0
-    verbose = args.verbose
-    
-    with open(model_path, 'rb') as f:
+    with open(args.model, 'rb') as f:
         model_config = yaml.safe_load(f)
         model_name = model_config['Model']['name']
         model = Model(**model_config['Model'])
-
     print('Generated design points for:', model_name)
 
-    num_servers = 64
-    max_ctx_len_batch_1 = 2048 * 128
-    max_batch = 1024
-
     system_eval_args = []
-    with open(hw_pkl, 'rb') as f:
+    with open(args.hardware, 'rb') as f:
         servers = pickle.load(f)
         for server in servers:
-            system_eval_args.append((server, model, num_servers, max_ctx_len_batch_1, max_batch))
+            num_servers = 1
+            while num_servers <= args.max_num_servers:
+                system_eval_args.append((server, model, num_servers, args.max_ctx_len_batch_1, args.max_batch))
+                num_servers *= 2
 
     start_time = time.time()
     num_cores = multiprocessing.cpu_count()
     with multiprocessing.Pool(processes=num_cores) as pool:
         all_perf = pool.starmap(system_eval, system_eval_args)
     elapsed_time = time.time() - start_time
+    with open(args.results_dir+'/'+model.name+'.pkl', 'wb') as f:
+      pickle.dump(all_perf, f)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
 
-    best_tco = math.inf
-    for throughput_opt_perf in all_perf:
-        if throughput_opt_perf == None:
-            continue
-        if throughput_opt_perf.tco_per_token < best_tco:
-            best_tco = throughput_opt_perf.tco_per_token
-            generate_opt_perf = throughput_opt_perf
+    if args.verbose:
+        best_tco = math.inf
+        for (throughput_opt_perf, latency_opt_perf) in all_perf:
+            if throughput_opt_perf == None:
+                continue
+            if throughput_opt_perf.tco_per_token < best_tco:
+                best_tco = throughput_opt_perf.tco_per_token
+                generate_opt_perf = throughput_opt_perf
+        system = generate_opt_perf.system
 
-    with open(results_dir+'/'+model.name+'.pkl', 'wb') as f:
-      pickle.dump(generate_opt_perf, f)
-
-    system = generate_opt_perf.system
-
-    if verbose:
         print('=================================')
         print('num of srvs:', system.num_servers, ", mb/chip:", system.server.package.chip.sram_mb, ", tops/chip", system.server.package.chip.tops, ", chips/srv", system.server.num_chips)
         print('area', system.server.package.chip.area)

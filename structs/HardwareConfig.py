@@ -73,10 +73,13 @@ class PackageConfig(Base):
 
   def explore(self, chips: List[Chip], verbose: bool = False) -> List[Package]:
     pkgs = []
+    pkg_id = 0
     for chip in chips:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
         config['chip'] = chip
+        if pkg_id not in config:
+          config['package_id'] = pkg_id
         if 'mem_3d' in config:
           raise NotImplementedError('3D memory not supported yet.')
         if 'hbm' in config:
@@ -84,6 +87,7 @@ class PackageConfig(Base):
         pkg = Package(**config)
         if pkg.valid:
           pkgs.append(pkg)
+          pkg_id += 1
         elif verbose:
           print(f'Invalid package design: {pkg.invalid_reason}')
 
@@ -104,12 +108,16 @@ class ServerConfig(Base):
 
   def explore(self, pkgs: List[Package], verbose: bool = False) -> List[Server]:
     srv_specs = []
+    srv_id = 0
     for pkg in pkgs:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
+        if 'server_id' not in config:
+          config['server_id'] = srv_id
         config['package'] = pkg
         config['io'] = IO(**config['io'])
         srv_specs.append((config,verbose))
+        srv_id += 1
 
     num_cores = multiprocessing.cpu_count()
     with multiprocessing.Pool(processes=num_cores) as pool:
