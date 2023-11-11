@@ -56,6 +56,8 @@ class Chip(Base):
    sram_mb: Optional[float] = None
    sram_bw_TB_per_sec: Optional[float] = None
    core_tdp: Optional[float] = None
+   x: Optional[float] = None # mm
+   y: Optional[float] = None # mm
 
    vdd: float = 0.8
 
@@ -82,6 +84,9 @@ class Chip(Base):
                self.cost = self._get_cost()
                self.tops = self.perf / 1e12
                self.sram_bw_TB_per_sec = self.sram_bw / 1e12
+               # assume the chip is a square
+               self.x = math.sqrt(self.area)
+               self.y = self.x
 
    def update_using_area_ratio(self) -> None:
       side = math.sqrt(self.area)

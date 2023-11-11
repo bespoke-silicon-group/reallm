@@ -44,34 +44,53 @@ class Package(Base):
         self.sram = self.num_chips * self.chip.sram
         self.dram = 0.0
 
-        if self.mem_3d:
-            raise NotImplementedError('3D memory is not supported yet')
-            # self.tdp += (self.num_chips * self.mem_3d.tdp)
-            # if self.mem_3d.mem_type == '3d_dram':
-            #     self.dram += (self.num_chips * self.mem_3d.size)
-            # elif self.mem_3d.mem_type == '3d_sram':
-            #     self.sram += (self.num_chips * self.mem_3d.size)
-        if self.hbm:
-            self.tdp += self.hbm.total_tdp
-            self.dram += self.hbm.total_bytes
-            self.heatsource_length = math.sqrt(self.chip.area + self.hbm.total_area)
+        if self.check_area():
+            self.valid = True
+            if self.mem_3d:
+                raise NotImplementedError('3D memory is not supported yet')
+                # self.tdp += (self.num_chips * self.mem_3d.tdp)
+                # if self.mem_3d.mem_type == '3d_dram':
+                #     self.dram += (self.num_chips * self.mem_3d.size)
+                # elif self.mem_3d.mem_type == '3d_sram':
+                #     self.sram += (self.num_chips * self.mem_3d.size)
+            if self.hbm:
+                self.tdp += self.hbm.total_tdp
+                self.dram += self.hbm.total_bytes
+            self.total_mem = self.sram + self.dram
+            self._update_dimension()
         else:
-            self.heatsource_length = math.sqrt(self.chip.area)
-        self.heatsource_width = self.heatsource_length
-
-        self.total_mem = self.sram + self.dram
-
-        self._update_dimension()
-
-        self.valid = self.check_area()
+            self.valid = False
     
     def check_area(self) -> bool:
-        # TODO: add more physical layout constraints
-        if True:
-            return True
+        if self.mem_3d:
+            raise NotImplementedError('3D memory is not supported yet')
+        if self.hbm:
+            # check the physical layout of HBM to see if there is enough space to place it
+            # now we only allow HBM to be placed on the long side of the chip
+            # and the long side of HBM is parallel to the side of the chip
+            # this is the same as GPU and TPU
+            chip_long_side = max(self.chip.x, self.chip.y)
+            hbm_long_side = max(self.hbm.stack_x, self.hbm.stack_y)
+            max_num_stacks = 2 * math.ceil(chip_long_side / hbm_long_side)
+            if self.hbm.num_stacks > max_num_stacks:
+                self.invalid_reason = f'Not enough space to place {self.hbm.num_stacks} HBM stacks'
+                return False
+            elif self.hbm.num_stacks > max_num_stacks / 2:
+                # If place on both sides
+                num_stacks_per_side = math.ceil(self.hbm.num_stacks / 2)
+                chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
+                chip_hbm_short_side = min(self.chip.x, self.chip.y) + 2 * min(self.hbm.stack_x, self.hbm.stack_y)
+            else:
+                # If place on one side only
+                num_stacks_per_side = self.hbm.num_stacks
+                chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
+                chip_hbm_short_side = min(self.chip.x, self.chip.y) + min(self.hbm.stack_x, self.hbm.stack_y)
+            self.heatsource_length = max(chip_hbm_long_side, chip_hbm_short_side)
         else:
-            self.invalid_reason = 'Package area violation'
-            return False
+            self.heatsource_length = max(self.chip.x, self.chip.y)
+        self.heatsource_width = self.heatsource_length
+
+        return True
         
     def _update_dimension(self) -> None:
         # To CONFIRM!
