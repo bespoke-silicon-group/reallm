@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class ChipConstants():
@@ -14,13 +14,31 @@ class ChipConstants():
 
     max_die_area: int = 900
     D0: float = 0.001 # defects/mm2 = defects/cm2/100
-    alpha: float = 26.0
+    alpha: float = 10.0 # critical level
     wafer_diameter: int = 300 # in mm
     wafer_dicing_gap: float = 0.1 # in mm
     wafer_cost: int = 10000 # in $
     testing_cost_overhead: float = 0.01 # testing add 0.01 cost per die
 
     max_power_density: float = 1.0 # Watts/mm2
+
+@dataclass
+class PackageConstants():
+    max_die_area: float = 1400 # A100 is around 1400mm2
+    # organic substrate
+    os_area_scale_factor: float = 4.0
+    os_cost_per_mm2: float = 0.005
+    # if there's more than one chips in a package, the cost will be multiplied by the factor, 
+    # which depends on the package area: {area_threshold: cost_factor}
+    os_layer_scale_factor: dict = field(default_factory=lambda: {30*30: 2, 17*17: 1.75, 0: 1.0})
+    os_bonding_yield: float = 0.99
+    c4_bump_cost_per_mm2: float = 0.005
+    # silicon interposer
+    si_area_scale_factor: float = 1.1
+    si_wafer_cost: float = 1937.0 # $/wafer for 55nm technology
+    si_bonding_yield: float = 0.95
+    si_D0: float = 0.0007 # defects/mm2 = defects/cm2/100
+    si_alpha: float = 6.0 # critical level
 
 @dataclass
 class ServerConstants():
@@ -62,6 +80,7 @@ class TCOConstants():
 
 
 
+ChipConstants7nm = ChipConstants()
+PackageConstantsCommon = PackageConstants()
 ServerConstantsCommon = ServerConstants()
 TCOConstantsCommon = TCOConstants()
-ChipConstants7nm = ChipConstants()

@@ -29,8 +29,8 @@ Package:
      - 8589934592 # 8 GB
     stack_bandwidth: 
      - 659277479936 # 614 GB/s
-    stack_cost: 
-     - 60 # $120/16GB
+    cost_per_gb:
+     - 7.5 # $120 for 16 GB
 
 Server:
   packages_per_lane: 2

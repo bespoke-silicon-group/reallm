@@ -8,7 +8,7 @@ CONFIG_DIR = configs
 HARDWARE_CONFIG_DIR = $(CONFIG_DIR)/hardware
 MODELS_CONFIG_DIR = $(CONFIG_DIR)/models
 
-HARDWARE = cc tpuv4i test hbm_exp
+HARDWARE = cc tpuv4i test hbm_exp gpu_a100 multi_chiplet
 MODELS = gpt2 megatron gpt3 gopher mtnlg bloom palm llama2
 
 VERBOSE ?= false

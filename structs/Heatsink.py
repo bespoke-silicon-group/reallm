@@ -34,8 +34,10 @@ class Heatsink(Base):
     max_power: Optional[float] = None
 
     # Constants
-    base_width = 0.04 # meter, need to update this for hetergeneous integration
-    base_length = 0.04 # meter
+    base_width = 0.05 # meter, DOUBLE CHECK THIS
+    base_length = 0.05 # meter
+    # base_width = 0.04 # meter, need to update this for hetergeneous integration
+    # base_length = 0.04 # meter
     max_length = 450.0 * 1e-3 # meter
     air_specific_heat = 1004.9 # J/(kgK)
     air_thermal_cond = 0.02624 # W/(mK)
@@ -82,7 +84,7 @@ class Heatsink(Base):
 
     def _find_heatsink(self, hs_tmpl) -> Optional[dict]:
         if hs_tmpl['die_width'] > hs_tmpl['base_width']:
-            print('ERROR, Die width is larger than Heat Sink width')
+            print(f'Die width {hs_tmpl["die_width"]} is larger than max Heat Sink width {hs_tmpl["base_width"]}')
             return None
    
         # Find the best result by considering single heatsink covering the lane 
@@ -274,8 +276,8 @@ input_template = {
    'fin_air_volume'         : 0.009439,   # m^3/s
    'n_of_fins'              : 20.0,
    'base_thickness'         : 5e-3,
-   'base_width'             : 0.04,
-   'base_length'            : 0.04,
+   'base_width'             : 0.05,       # the original is 0.04, updated for A100 GPU
+   'base_length'            : 0.05,
    'base_thermal_cond'      : 200.0,      # Thermal conductivity, W/(mK)
 
    # TIM and Silicon

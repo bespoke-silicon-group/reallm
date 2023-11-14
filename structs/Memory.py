@@ -23,11 +23,11 @@ class HBM(Memory):
     num_stacks: Optional[int] = None # need to be specified
     stack_bytes: int = 16*1024*1024*1024 # in byte 
     stack_bandwidth: int = 410*1024*1024*1024 # in byte/sec
-    stack_cost: float = 120 # in $
     stack_x: float = 7.75 # in mm
     stack_y: float = 11.87 # in mm
     stack_tdp: Optional[float] = None # in watt
     stack_area: Optional[float] = None # in mm
+    cost_per_gb: float = 7.5 # $120 for 16GB
 
     def update(self) -> None:
         if not self.mem_type:
@@ -41,4 +41,4 @@ class HBM(Memory):
         self.total_bandwidth = self.num_stacks * self.stack_bandwidth
         self.total_area = self.num_stacks * self.stack_area
         self.total_tdp = self.num_stacks * self.stack_tdp
-        self.total_cost = self.num_stacks * self.stack_cost
+        self.total_cost = self.total_bytes / 1024 / 1024 / 1024 * self.cost_per_gb

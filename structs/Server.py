@@ -15,6 +15,7 @@ class Server(Base):
     packages_per_lane: int # number of packages per lan
     io: IO # server to server links
     num_lanes: int = 8 # number of lanes
+    custom_max_power: Optional[float] = None # custom max server power
 
     num_packages: Optional[int] = None # number of packages per server
     num_chips: Optional[int] = None # number of chips per server
@@ -85,8 +86,12 @@ class Server(Base):
         if self.hs.max_power < self.package.tdp:
             self.invalid_reason = f"Heatsink {self.hs.max_power} can't cool the package tdp {self.package.tdp}"
             return False
-        if self.constants.SrvMaxPower < self.core_tdp:
-            self.invalid_reason = f"Server core power {self.core_tdp} is too large"
+        if self.custom_max_power:
+            if self.custom_max_power < self.core_tdp:
+                self.invalid_reason = f"Server core power {self.core_tdp} is too large, max power is {self.custom_max_power}"
+                return False
+        elif self.constants.SrvMaxPower < self.core_tdp:
+            self.invalid_reason = f"Server core power {self.core_tdp} is too large, max power is {self.constants.SrvMaxPower}"  
             return False
         return True
 

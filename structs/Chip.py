@@ -50,7 +50,7 @@ class Chip(Base):
    mac_area: Optional[float] = None
 
    die_yield: Optional[float] = 0.0
-   dies_per_wafer: Optional[int] = None
+   dpw: Optional[int] = None # dies per wafer   
 
    tops: Optional[float] = None
    sram_mb: Optional[float] = None
@@ -150,76 +150,76 @@ class Chip(Base):
       tdp += self.pkg2pkg_io.tdp
       return tdp
 
-   def _get_die_yield(self) -> float:
-      if (self.area == 0):
-         return 1.0
-      else:
-         # Negative binomial model for yield
-         return math.pow((1.0 + (self.constants.D0 * self.area / self.constants.alpha)), 
-                         self.constants.alpha * -1)
-
    def _get_cost(self) -> float:
-      self.die_yield = self._get_die_yield()
-      self.dies_per_wafer = self._dies_per_wafer()
-      die_cost = (self.constants.wafer_cost * 1.0 / self.dies_per_wafer) / self.die_yield
+      self.die_yield = get_die_yield(self.area, self.constants.D0, self.constants.alpha)
+      self.dpw = dies_per_wafer(self.area, self.constants.wafer_diameter, self.constants.wafer_dicing_gap)
+      die_cost = (self.constants.wafer_cost * 1.0 / self.dpw) / self.die_yield
       testing_cost_per_die = die_cost * self.constants.testing_cost_overhead
   
       return die_cost + testing_cost_per_die
    
-   ################################################
-   # Calculate dies per wafer, from ASIC Cloud    #
-   ################################################
-   def _dies_per_wafer(self) -> int:
+#################################################
+# Yield and DPW calculation, from ASIC Cloud    #
+#################################################
 
-      # given circle radious and square edge length, and distance between
-      # diameter and center row of squares (longest one), calculates the 
-      # number of squares that can be fited
-      def max_fit(r, a, d) -> int:
-         D1 = a / 2.0 + d
-         # we don't need to calculate the longest line close to diameter
-         D2 = (3.0 * a) / 2.0 - d
-         R2 = r * r
-         summ = 0
-         while (D1 < r):
-            l = 2.0 * math.sqrt(R2 - D1 * D1)
-            summ += math.floor(l / a)
-            D1 += a
-         while (D2 < r):
-            l = 2.0 * math.sqrt(R2 - D2 * D2)
-            summ += math.floor(l / a)
-            D2 += a
-         return int(summ)
-      
-      # we want to find the optimal value by binary searching the different values
-      # for center row distance to diameter. The optimal solution would have 
-      # the longest row farthest from the center, having two long lines is the best if possible
-      def max_square(r, a) -> int:
-         start = 0.0
-         end = a / 2.0
-         max_start = max_fit(r, a, start)
-         max_end = max_fit(r, a, end)
-         # if we can fit two long rows, it's the optimal point
-         if max_end >= max_start:
-            return max_end	
-         step = a / 8.0
-         end = end / 2.0
-         max_end = max_fit(r, a, end)
-         while (max_start != max_end):
-            if (max_start > max_end):
-               end -= step
-            else:
-               start = end
-               max_start = max_end
-               end += step
+def get_die_yield(area: float, D0: float, alpha: float) -> float:
+   if (area == 0):
+      return 1.0
+   else:
+      # Negative binomial model for yield
+      return math.pow((1.0 + (D0 * area / alpha)), alpha * -1)
 
-            max_end = max_fit(r,a,end)
-            step = step / 2.0
-         return max_end
+# def dies_per_wafer(wafer_d) -> int:
+def dies_per_wafer(die_area: float, wafer_diameter: float, wafer_dicing_gap: float) -> int:
 
-      # Converts the problem of dies per wafer to squares per circle
-      # by adding the dicing gap to die width as square edge and calculate
-      # radious instead of diameter
-      return max_square(self.constants.wafer_diameter / 2.0,
-                        math.sqrt(self.area) + self.constants.wafer_dicing_gap)
+   # given circle radious and square edge length, and distance between
+   # diameter and center row of squares (longest one), calculates the 
+   # number of squares that can be fited
+   def max_fit(r, a, d) -> int:
+      D1 = a / 2.0 + d
+      # we don't need to calculate the longest line close to diameter
+      D2 = (3.0 * a) / 2.0 - d
+      R2 = r * r
+      summ = 0
+      while (D1 < r):
+         l = 2.0 * math.sqrt(R2 - D1 * D1)
+         summ += math.floor(l / a)
+         D1 += a
+      while (D2 < r):
+         l = 2.0 * math.sqrt(R2 - D2 * D2)
+         summ += math.floor(l / a)
+         D2 += a
+      return int(summ)
+   
+   # we want to find the optimal value by binary searching the different values
+   # for center row distance to diameter. The optimal solution would have 
+   # the longest row farthest from the center, having two long lines is the best if possible
+   def max_square(r, a) -> int:
+      start = 0.0
+      end = a / 2.0
+      max_start = max_fit(r, a, start)
+      max_end = max_fit(r, a, end)
+      # if we can fit two long rows, it's the optimal point
+      if max_end >= max_start:
+         return max_end	
+      step = a / 8.0
+      end = end / 2.0
+      max_end = max_fit(r, a, end)
+      while (max_start != max_end):
+         if (max_start > max_end):
+            end -= step
+         else:
+            start = end
+            max_start = max_end
+            end += step
+
+         max_end = max_fit(r,a,end)
+         step = step / 2.0
+      return max_end
+
+   # Converts the problem of dies per wafer to squares per circle
+   # by adding the dicing gap to die width as square edge and calculate
+   # radious instead of diameter
+   return max_square(wafer_diameter / 2.0, math.sqrt(die_area) + wafer_dicing_gap)
 
 

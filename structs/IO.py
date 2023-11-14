@@ -18,7 +18,7 @@ class IO(Base):
    tdp: Optional[float] = None
    def update(self) -> None:
       # This is how it works in ASPLOS submission apprently, fix this later
-      self.bandwidth = self.num * self.bandwidth_per_io / 2
-      # self.bandwidth = self.num * self.bandwidth_per_io 
+      # self.bandwidth = self.num * self.bandwidth_per_io / 2
+      self.bandwidth = self.num * self.bandwidth_per_io 
       self.area = self.num * self.area_per_io
       self.tdp = self.num * self.tdp_per_io
