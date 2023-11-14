@@ -33,7 +33,7 @@ class Model(Base):
     
     def get_generate_flops(self, ctx_len: int) -> int:
         fc_flops = self.num_layers * 3 * 4 * self.d * self.d * 2
-        atten_flops = self.num_layers * 2 * self.d * ctx_len * ctx_len * 2
+        atten_flops = self.num_layers * 2 * self.d * ctx_len * 1 * 2
         return fc_flops + atten_flops
     
 

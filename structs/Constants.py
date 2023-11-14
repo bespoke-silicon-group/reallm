@@ -78,7 +78,16 @@ class TCOConstants():
     SrvOpexRate = 0.05         # % of server amortization
     SrvAvgPwr = 1.0            # Server Average Power Relative to Peak,,
 
+Joules = float
+PicoJoules = float
+@dataclass
+class EnergyConstants:
+    sram: PicoJoules = 1.25
+    dram: PicoJoules = 80.0
+    hbm2: PicoJoules = 31.2
+    stacked_dram: PicoJoules = 18.72
 
+    fma_fp16: PicoJoules = 2.75
 
 ChipConstants7nm = ChipConstants()
 PackageConstantsCommon = PackageConstants()

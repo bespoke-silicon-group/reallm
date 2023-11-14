@@ -5,6 +5,7 @@ from .Base import Base
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
+from .Energy import TokenEnergy
 import math
 
 if TYPE_CHECKING:
@@ -95,12 +96,29 @@ class Performance(Base):
             throughput_flops = self.generate_throughput * self.system.model.get_generate_flops(0)
         else:
             throughput_flops = self.generate_throughput * self.system.model.get_generate_flops(self.prefill_len + self.generate_len / 2)
+        # print(f'system server perf = {self.system.server.perf / 1e12}, number of servers = {self.system.num_servers}')
+        # print(f'throughput flops = {throughput_flops / 1e12}, sys peak flops = {sys_peak_flops / 1e12}')
+        # print(f'generate throughput = {self.generate_throughput}, batch = {self.batch}, micro_batch = {self.mapping.micro_batch}, micro_batch_latency = {micro_batch_latency.total}')
+        # print(f'throughput per chip = {self.generate_throughput_per_chip}')
+        # print(f'generate flops = {self.system.model.get_generate_flops(0) / 1e12}')
+        # print(f'generate flops = {self.system.model.get_generate_flops(100) / 1e12}')
+        # print(f'generate flops = {self.system.model.get_generate_flops(500) / 1e12}')
+        # print(f'generate flops = {self.system.model.get_generate_flops(self.prefill_len + self.generate_len / 2) / 1e12}')
         self.generate_utilization = throughput_flops / sys_peak_flops
     
     def tco_eval(self, utilization) -> None:
             """
             When calculating the TCO, we use utilization * TDP as the real power consumption.
             """
+            joules_per_token = TokenEnergy(system=self.system, ctx_len=self.prefill_len + self.generate_len / 2).joules_per_token
+            energy_model_power = joules_per_token * self.generate_throughput # in watts
+            # print(f"TCO evaluation, utilization based on FLOPS = {utilization}, \
+            #       server TDP = {self.system.server.tdp * utilization}, \
+            #       server core tdp = {self.system.server.core_tdp * utilization}, \
+            #       energy model power = {energy_model_power}")
+
+            # TODO: use the real power consumption
+
             self.srv_tco = TCO(server_tdp=self.system.server.tdp * utilization,
                                server_cost=self.system.server.cost,
                                server_life=self.system.server.constants.SrvLife)
