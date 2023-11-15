@@ -22,6 +22,7 @@ class System(Base):
     prefill_eval_ctx_len: int = 1024
     generate_eval_prefill_len: int = 128
     generate_eval_generate_len: int = 128
+    energy_model: bool = True # whether to use the energy model for calculating the TCO
 
     asplos_version: bool = False
 
@@ -32,6 +33,10 @@ class System(Base):
     kv_bw_per_chip: Optional[float] = None # kv cache bandwidth per chip, in Byte/sec
     num_packages: Optional[int] = None
     num_chips: Optional[int] = None
+    perf: Optional[int] = None # #FLOPS
+    tdp: Optional[float] = None # total tdp
+    core_tdp: Optional[float] = None # core tdp including chips and memories
+    other_tdp: Optional[float] = None # other parts tdp
 
     batches_prefill_latency_opt_mapping: Optional[dict[int, Mapping]] = None # batch size to mapping optimized for prefill latency   
     batches_generate_throughput_opt_mapping: Optional[dict[int, Mapping]] = None # batch size to mapping optimized for token generation throughput
@@ -73,7 +78,6 @@ class System(Base):
         self.num_packages = self.num_servers * self.server.num_packages
         self.num_chips = self.num_servers * self.server.num_chips
 
-        # TODO: support weight or KV cache in 3D memory
         if self.server.package.mem_3d:
             raise NotImplementedError('3D memory or side memory is not supported yet.')
         if self.server.package.hbm:
@@ -82,6 +86,11 @@ class System(Base):
         else:
             self.weight_bw_per_chip = self.server.package.chip.sram_bw
             self.kv_bw_per_chip = self.server.package.chip.sram_bw
+        
+        self.perf = self.num_servers * self.server.perf
+        self.tdp = self.num_servers * self.server.tdp
+        self.core_tdp = self.num_servers * self.server.core_tdp
+        self.other_tdp = self.tdp - self.core_tdp
         
         return True
 
@@ -153,6 +162,9 @@ class System(Base):
                 continue
             else:
                 t_chip = t_pkg * self.server.package.num_chips # int
+                # either t_chip should be a divisor of num_heads, or num_heads should be a divisor of t_chip
+                if self.model.num_heads % t_chip != 0 and t_chip % self.model.num_heads != 0:
+                    continue
                 # iterate through all possible micro batch sizes
                 micro_batch = 1
                 while micro_batch <= batch:

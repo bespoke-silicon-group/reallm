@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 from .Base import Base
 from .IO import IO
@@ -20,7 +20,7 @@ class Server(Base):
     num_packages: Optional[int] = None # number of packages per server
     num_chips: Optional[int] = None # number of chips per server
     core_tdp: Optional[float] = None # core tdp including chips and memories
-    # other_tdp: Optional[float] = None # other parts tdp
+    other_tdp: Optional[float] = None # other parts tdp
     tdp: Optional[float] = None # total tdp
     hs: Optional[Heatsink] = None # heatsinks used, per package
 
@@ -58,7 +58,8 @@ class Server(Base):
                 self.perf = self.package.perf * self.num_packages
                 self.sram = self.package.sram * self.num_packages
                 self.dram = self.package.dram * self.num_packages
-                self.tdp = self._get_tdp()
+                self.core_tdp, self.other_tdp = self._get_tdp()
+                self.tdp = self.core_tdp + self.other_tdp
                 self.cost = self._get_cost()
                 self.tco = TCO(self.tdp, self.cost, self.constants.SrvLife)
                 self.tops = self.perf / 1e12
@@ -95,15 +96,14 @@ class Server(Base):
             return False
         return True
 
-    def _get_tdp(self) -> float:
+    def _get_tdp(self) -> Tuple[float, float]:
         w_fan = self.constants.FanPower * self.num_lanes
-        # This is a bug in the original code, 0.5 is the w_IO per chip. It should instead be
-        # w_dcdc = (self.package.tdp * self.num_packages + self.constants.APPPower) / self.constants.DCDCEfficiency
-        w_dcdc = (self.package.tdp * self.num_packages + self.constants.APPPower + 0.5) / self.constants.DCDCEfficiency
-        output_of_psu = w_dcdc + w_fan
-        server_power = output_of_psu / self.constants.PSUEfficiency
+        w_cpu = self.constants.APPPower
+        other_power = w_fan + w_cpu
+        other_power = other_power / self.constants.DCDCEfficiency / self.constants.PSUEfficiency
+        update_core_power = self.core_tdp / self.constants.DCDCEfficiency / self.constants.PSUEfficiency
 
-        return server_power
+        return update_core_power, other_power
 
     def _get_cost(self) -> float:
         c_dcdc = self.constants.APPPower / 1.0

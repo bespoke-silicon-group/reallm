@@ -50,8 +50,8 @@ class ServerConstants():
     DCDCEfficiency = 0.95     # 5% loss
     FanPower = 7.4            # W/each
     FanCost = 15.0
-    APPPower = 10.0           # W (Application Processor + DRAM)
-    APPCost = 10.0            # $ (Application Processor + DRAM)
+    APPPower = 50.0           # W (Application Processor + Srv DRAM), on average
+    APPCost = 200.0           # $ (Application Processor + Srv DRAM)
     # PSU
     PSUCostPerW = 0.13        # $/W
     PSUEfficiency = 0.95      # 5% loss
@@ -82,12 +82,16 @@ Joules = float
 PicoJoules = float
 @dataclass
 class EnergyConstants:
-    sram: PicoJoules = 1.25
+    # per byte
+    sram_wgt: PicoJoules = 1.25 # large SRAM, for weight
+    sram_act: PicoJoules = 7.5/8 # small SRAM, for activation, from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
     dram: PicoJoules = 80.0
     hbm2: PicoJoules = 31.2
     stacked_dram: PicoJoules = 18.72
 
-    fma_fp16: PicoJoules = 2.75
+    # fma_fp16: PicoJoules = 2.75
+    # fma_fp16: PicoJoules = 0.16 + 0.34 # from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
+    fma_fp16: PicoJoules = 1.3 # from slides 17 of https://hc33.hotchips.org/assets/program/conference/day2/HC2021.Graphcore.SimonKnowles.v04.pdf
 
 ChipConstants7nm = ChipConstants()
 PackageConstantsCommon = PackageConstants()

@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Tuple
 from .Base import Base
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
-from .Energy import TokenEnergy
+from .Constants import Joules, EnergyConstants
 import math
 
 if TYPE_CHECKING:
@@ -22,16 +22,24 @@ class Performance(Base):
     asplos_version: bool = False
 
     prefill_latency: Optional[float] = None # prefill latency, in sec
+    prefill_throughput: Optional[float] = None # the throughput of prefill stage, in tokens/sec
+    prefill_utilization: Optional[float] = None
+    prefill_core_energy: Optional[Energy] = None # prefill total core energy
+    prefill_power: Optional[float] = None # prefill power, in watts
+    prefill_srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
+    prefill_tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
+
     generate_latency: Optional[float] = None # generate latency for generate_len tokens, in sec
     generate_throughput: Optional[float] = None # the peak throughput of generate stage, in tokens/sec
-    generate_throughput_per_chip: Optional[float] = None # the peak throughput of generate stage per chip, in tokens/sec
-    max_ctx_len: Optional[int] = None # max context length, given the input hardware
-    prefill_utilization: Optional[float] = None
     generate_utilization: Optional[float] = None
-    overall_utilization: Optional[float] = None
+    generate_throughput_per_chip: Optional[float] = None # the peak throughput of generate stage per chip, in tokens/sec
+    generate_core_energy: Optional[Energy] = None # generate total core energy
+    generate_power: Optional[float] = None # generate power, in watts
+    generate_srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
+    generate_tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
+
     srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
     tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
-
 
     def update(self) -> None:
         """
@@ -43,16 +51,22 @@ class Performance(Base):
         if self.update_on_init:
             self.prefill_eval()
             self.generate_eval()
-            # When calculating the TCO, we only consider the utilization of the generate stage.
-            self.tco_eval(self.generate_utilization)
+            self.srv_tco = self.generate_srv_tco
+            self.tco_per_token = self.generate_tco_per_token
     
     def prefill_eval(self) -> None:
         micro_batch_latency = self._get_micro_batch_latency('prefill')
         self.prefill_latency = micro_batch_latency.total + (self.batch / self.mapping.micro_batch - 1) * micro_batch_latency.pipeline_stage
+        self.prefill_throughput = self.batch * self.prefill_len / self.prefill_latency
 
-        # TODO: calculate utilization based on flops
-        # total_flops = (12 * 2 * self.system.model.d ** 2 * self.prefill_len) * self.system.model.num_layers * self.batch
-        self.prefill_utilization = micro_batch_latency.compute / micro_batch_latency.total
+        sys_peak_flops = self.system.perf * self.prefill_latency
+        real_flops = self.system.model.get_prefill_flops(self.prefill_len) * self.batch
+        self.prefill_utilization = real_flops / sys_peak_flops
+
+        self.prefill_core_energy = self._get_core_energy('prefill')
+        self.prefill_power = self.prefill_core_energy.total / self.prefill_latency + self.system.other_tdp
+
+        self.prefill_srv_tco, self.prefill_tco_per_token = self._get_tco('prefill')
 
     def generate_eval(self) -> None:
         """
@@ -87,11 +101,11 @@ class Performance(Base):
         """
         micro_batch_latency = self._get_micro_batch_latency('generate')
         avg_token_latency = max(micro_batch_latency.total, micro_batch_latency.pipeline_stage * (self.batch / self.mapping.micro_batch))
-        self.generate_latency = micro_batch_latency.total + self.generate_len * avg_token_latency
+        self.generate_latency = micro_batch_latency.total + (self.generate_len - 1) * avg_token_latency
         self.generate_throughput = 1 / avg_token_latency * self.batch
-        self.generate_throughput_per_chip = self.generate_throughput / (self.system.num_servers * self.system.server.num_chips)
+        self.generate_throughput_per_chip = self.generate_throughput / self.system.num_chips
 
-        sys_peak_flops = self.system.server.perf * self.system.num_servers
+        sys_peak_flops = self.system.perf
         if self.asplos_version:
             throughput_flops = self.generate_throughput * self.system.model.get_generate_flops(0)
         else:
@@ -105,38 +119,143 @@ class Performance(Base):
         # print(f'generate flops = {self.system.model.get_generate_flops(500) / 1e12}')
         # print(f'generate flops = {self.system.model.get_generate_flops(self.prefill_len + self.generate_len / 2) / 1e12}')
         self.generate_utilization = throughput_flops / sys_peak_flops
+
+        self.generate_core_energy = self._get_core_energy('generate')
+        self.generate_power = self.generate_core_energy.total / self.generate_latency + self.system.other_tdp
+
+        self.generate_srv_tco, self.generate_tco_per_token = self._get_tco('generate')
     
-    def tco_eval(self, utilization) -> None:
-            """
-            When calculating the TCO, we use utilization * TDP as the real power consumption.
-            """
-            joules_per_token = TokenEnergy(system=self.system, ctx_len=self.prefill_len + self.generate_len / 2).joules_per_token
-            energy_model_power = joules_per_token * self.generate_throughput # in watts
-            # print(f"TCO evaluation, utilization based on FLOPS = {utilization}, \
-            #       server TDP = {self.system.server.tdp * utilization}, \
-            #       server core tdp = {self.system.server.core_tdp * utilization}, \
-            #       energy model power = {energy_model_power}")
+    def _get_tco(self, stage: str) -> Tuple[TCO, float]:
+        '''
+        Calculate the system TCO of prefill or generate.
+        '''
+        if stage == 'prefill':
+            utilization = self.prefill_utilization
+            srv_power = self.prefill_power / self.system.num_servers
+            throughput = self.prefill_throughput
+        elif stage == 'generate':
+            utilization = self.generate_utilization
+            srv_power = self.generate_power / self.system.num_servers
+            throughput = self.generate_throughput
 
-            # TODO: use the real power consumption
+        # print(f"{stage}: \
+        #         \nFLOPS utilization = {utilization}, \
+        #         \nthrougput = {throughput}, \
+        #         \nmircobatch = {self.mapping.micro_batch}, \
+        #         \ntdp = {self.system.tdp}, \
+        #         \ncore tdp = {self.system.core_tdp}, \
+        #         \nother tdp = {self.system.other_tdp}, \
+        #         \nutil power = {self.system.tdp * utilization}, \
+        #         \nenergy model power = {srv_power * self.system.num_servers}, ")
 
-            self.srv_tco = TCO(server_tdp=self.system.server.tdp * utilization,
-                               server_cost=self.system.server.cost,
-                               server_life=self.system.server.constants.SrvLife)
-            if self.asplos_version:
-                # this is a bug in the asplos version
-                self.srv_tco.fix_part -= self.srv_tco.srv_opex
-                self.srv_tco.power_part += (self.srv_tco.srv_opex * utilization)
-                self.srv_tco.total = self.srv_tco.fix_part + self.srv_tco.power_part
-            srv_life_sec = self.system.server.constants.SrvLife * 365 * 24 * 3600
-            self.tco_per_token = self.srv_tco.total * self.system.num_servers / srv_life_sec / self.generate_throughput
+        if self.system.energy_model:
+            srv_tco = TCO(server_tdp=srv_power,
+                          server_cost=self.system.server.cost,
+                          server_life=self.system.server.constants.SrvLife)
+        else:
+            srv_tco = TCO(server_tdp=self.system.server.tdp * utilization,
+                          server_cost=self.system.server.cost,
+                          server_life=self.system.server.constants.SrvLife)
+        if self.asplos_version:
+            # this is a bug in the asplos version
+            srv_tco.fix_part -= self.srv_tco.srv_opex
+            srv_tco.power_part += (self.srv_tco.srv_opex * utilization)
+            srv_tco.total = self.srv_tco.fix_part + self.srv_tco.power_part
+        srv_life_sec = self.system.server.constants.SrvLife * 365 * 24 * 3600
+        tco_per_sec = srv_tco.total * self.system.num_servers / srv_life_sec
+        tco_per_token = tco_per_sec / throughput
 
-    def _get_overall_utilization(self) -> float:
-        # TODO: calculate utilization based on prefill and generate flops, now assume it's 50%
-        return 0.50
+        return srv_tco, tco_per_token
     
+    def _get_core_energy(self, stage: str) -> Energy:
+        '''
+        Calculate the total core energy of prefill or generate.
+        It includes the energy of FMA, memory access, and communication. 
+        Memory access includes the energy of reading weights and kv from SRAM or HBM for once, 
+        and reading activation from SRAM for once.
+        Communication only includes the energy of all-reduce on the chip to chip link.
+        This will be the lower bound of the real energy consumption.
+
+        :param stage: the stage of inference, either 'prefill' or 'generate'
+        :return: in the form of Energy dataclass
+        '''
+        d_model = self.system.model.d
+        n_layers = self.system.model.num_layers
+        bytes_per_word = self.system.model.bytes_per_number
+
+        if self.system.server.package.hbm:
+            # if there is HBM, we will use HBM for kv cache and weight
+            weight_mem_energy = self.system.server.package.hbm.pj_per_byte
+            kvcache_mem_energy = self.system.server.package.hbm.pj_per_byte
+        else:
+            # otherwise, we will use SRAM for weight and DRAM for kv cache
+            weight_mem_energy = EnergyConstants().sram_wgt
+            kvcache_mem_energy = EnergyConstants().sram_wgt
+
+        num_weights_per_layer = 12 * d_model * d_model
+        num_weights_total = n_layers * num_weights_per_layer
+        weight_mem_energy = num_weights_total * bytes_per_word * weight_mem_energy
+
+        # For activation: 
+        # FC: 1 in Q,K,V projection, 1 in post-atten, 1 in FF1, 4 in FF2
+        # Matmul: 2 in attention matmul
+        if stage == 'prefill':
+            num_acts_per_layer_fc = 7 * d_model * self.prefill_len * self.mapping.micro_batch
+            num_acts_per_layer_matmul = 2 * d_model * self.prefill_len * self.mapping.micro_batch
+            num_acts_per_layer = num_acts_per_layer_fc + num_acts_per_layer_matmul
+            num_acts_total = n_layers * num_acts_per_layer
+
+            num_kvcache_per_layer = 2 * d_model * self.prefill_len
+            num_kvcache_total = n_layers * num_kvcache_per_layer
+
+            gemm_fma_energy = num_weights_total * self.prefill_len * self.mapping.micro_batch * EnergyConstants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * self.prefill_len * self.mapping.micro_batch * EnergyConstants.fma_fp16
+
+            # 2 all-reduce per layer
+            num_allreduce_per_layer = 2 * d_model * self.prefill_len * self.mapping.micro_batch * self.mapping.t
+            num_allreduce_total = n_layers * num_allreduce_per_layer
+
+        elif stage == 'generate':
+            num_acts_per_layer_fc = 7 * d_model * 1 * self.mapping.micro_batch
+            num_acts_per_layer_matmul = 2 * d_model * 1 * self.mapping.micro_batch
+            num_acts_per_layer = num_acts_per_layer_fc + num_acts_per_layer_matmul
+            num_acts_total = n_layers * num_acts_per_layer
+
+            num_kvcache_per_layer = 2 * d_model * (self.prefill_len + self.generate_len / 2)
+            num_kvcache_total = n_layers * num_kvcache_per_layer
+
+            gemm_fma_energy = num_weights_total * 1 * self.mapping.micro_batch * EnergyConstants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * 1 * self.mapping.micro_batch * EnergyConstants.fma_fp16
+
+            # 2 all-reduce per layer
+            num_allreduce_per_layer = 2 * d_model * 1 * self.mapping.micro_batch * self.mapping.t
+            num_allreduce_total = n_layers * num_allreduce_per_layer
+
+        acts_energy = num_acts_total * bytes_per_word * EnergyConstants().sram_act
+        kvcache_mem_energy = num_kvcache_total * bytes_per_word * kvcache_mem_energy
+
+        mem_energy = weight_mem_energy + acts_energy + kvcache_mem_energy
+        fma_energy = gemm_fma_energy + matmul_fma_energy
+
+        if self.system.server.package.chip.chip2chip_io:
+            link_pj_per_byte = self.system.server.package.chip.chip2chip_io.pj_per_byte
+        else:
+            link_pj_per_byte = self.system.server.package.chip.pkg2pkg_io.pj_per_byte
+        comm_energy = num_allreduce_total * bytes_per_word * link_pj_per_byte
+
+        if stage == 'prefill':
+            num_iters = self.batch / self.mapping.micro_batch
+        elif stage == 'generate':
+            num_iters = self.batch / self.mapping.micro_batch * self.generate_len
+
+        return Energy(fma=fma_energy * num_iters / 1e12, 
+                      mem=mem_energy * num_iters / 1e12 , 
+                      comm=comm_energy * num_iters / 1e12)
+
     def _get_micro_batch_latency(self, stage: str) -> MicroBatchLatency:
         """
         Calculate the latency of one micro-batch inference.
+        We adopt weight stationary, all weights/kv-cache will be read only once.
 
         :param stage: the stage of inference, either 'prefill' or 'generate'
         :return: the latency of one inference, in sec
@@ -199,7 +318,6 @@ class Performance(Base):
         # to smaller than number of heads. When t > num of heads,
         # we need one more all-reduce for Q * K_T, both Q and K_T of a 
         # head are partitioned across (t / num_heads) chips.
-        # TODO: what if t % num_head != 0 or num_heads % t != 0?
         ##################################################################
         # Attention Layer
         # attention FC to get Q, K, and V matrix
@@ -326,7 +444,7 @@ class Performance(Base):
 
         chunk_bytes = num_bytes / num_nodes
         num_transfers = num_nodes - 1
-        all_gather_time = num_transfers * (chunk_bytes / bandwidth + init_time)
+        all_gather_time = num_transfers * chunk_bytes / bandwidth + init_time
         reduce_scatter_time = all_gather_time
         all_reduce_time = all_gather_time + reduce_scatter_time
 
@@ -339,7 +457,6 @@ class Performance(Base):
         
         return all_reduce_time
     
-
 @dataclass
 class MicroBatchLatency(Base):
     p: int
@@ -400,3 +517,15 @@ class MicroBatchLatency(Base):
         self.total_us = self.total * 1e6
         self.compute_us = self.compute * 1e6
         self. communication_us = self.communication * 1e6
+
+@dataclass
+class Energy(Base):
+    fma: Joules
+    mem: Joules
+    comm: Joules
+    other: Joules = 0.0
+
+    total: Optional[Joules] = None
+
+    def update(self) -> None:
+        self.total = self.fma + self.mem + self.comm + self.other
