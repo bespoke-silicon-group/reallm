@@ -127,7 +127,7 @@ class Performance(Base):
     
     def _get_tco(self, stage: str) -> Tuple[TCO, float]:
         '''
-        Calculate the system TCO of prefill or generate.
+        Calculate the server TCO of prefill or generate.
         '''
         if stage == 'prefill':
             utilization = self.prefill_utilization

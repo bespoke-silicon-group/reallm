@@ -21,7 +21,7 @@ class System(Base):
     max_batch: int = 1024 # max batch size
     prefill_eval_ctx_len: int = 1024
     generate_eval_prefill_len: int = 128
-    generate_eval_generate_len: int = 128
+    generate_eval_generate_len: int = 512
     energy_model: bool = True # whether to use the energy model for calculating the TCO
 
     asplos_version: bool = False

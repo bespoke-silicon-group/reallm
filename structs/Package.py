@@ -109,8 +109,8 @@ class Package(Base):
                 chip_hbm_short_side = min(self.chip.x, self.chip.y) + min(self.hbm.stack_x, self.hbm.stack_y)
             self.heatsource_length = max(chip_hbm_long_side, chip_hbm_short_side)
         else:
-            if self.area > self.constants.max_die_area:
-                self.invalid_reason = f'Not enough space to place {self.num_chips} chips'
+            if self.total_die_area > self.constants.max_die_area:
+                self.invalid_reason = f'Not enough space to place {self.num_chips} chips, the area is {self.total_die_area} mm2, but the max area is {self.constants.max_die_area} mm2'
                 return False
             self.heatsource_length = max(self.chip.x, self.chip.y) * math.ceil(math.sqrt(self.num_chips))
         self.heatsource_width = self.heatsource_length
