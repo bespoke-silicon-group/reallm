@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 from .Base import Base
 from .Server import Server
 from .Model import Model
@@ -10,6 +10,7 @@ from .Mapping import Mapping
 @dataclass
 class System(Base):
     server: Server
+    server_id: int
     model: Model
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
@@ -19,9 +20,9 @@ class System(Base):
     max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    prefill_eval_ctx_len: int = 1024
+    prefill_eval_ctx_len: int = 128
     generate_eval_prefill_len: int = 128
-    generate_eval_generate_len: int = 512
+    generate_eval_generate_len: int = 256
     energy_model: bool = True # whether to use the energy model for calculating the TCO
 
     asplos_version: bool = False
@@ -38,10 +39,11 @@ class System(Base):
     core_tdp: Optional[float] = None # core tdp including chips and memories
     other_tdp: Optional[float] = None # other parts tdp
 
-    batches_prefill_latency_opt_mapping: Optional[dict[int, Mapping]] = None # batch size to mapping optimized for prefill latency   
-    batches_generate_throughput_opt_mapping: Optional[dict[int, Mapping]] = None # batch size to mapping optimized for token generation throughput
-    prefill_latency_opt_perf: Optional[Performance] = None # performance (with mapping and batch size) optimized for prefill latency for 2048 tokens
-    generate_throughput_opt_perf: Optional[Performance] = None # performance (with mapping and batch size) optimized for token generation throughput
+    # Optimized performance for different batch sizes
+    batch_prefill_opt_lat: Optional[dict[int, Performance]] = None # batch size to optimized prefill latency performance
+    batch_prefill_opt_tco: Optional[dict[int, Performance]] = None # batch size to optimized prefill TCO/Token performance
+    batch_generate_opt_lat: Optional[dict[int, Performance]] = None # batch size to optimized generate latency performance
+    batch_generate_opt_tco: Optional[dict[int, Performance]] = None # batch size to optimized generate TCO/Token performance
 
     def update(self) -> None:
         self.valid = self._hardware_update()
@@ -61,6 +63,13 @@ class System(Base):
             if self.num_servers == None or self.num_servers * self.server.total_mem < required_mem:
                 # if the number of servers is not provided, we will use the total memory to derive it
                 self.num_servers = math.ceil(required_mem / self.server.total_mem)
+                # TODO: Find a smarter way later, make sure the number of layers is a multiple of the number of servers
+                if self.model.num_layers > self.num_servers:
+                    while self.model.num_layers % self.num_servers != 0:
+                        self.num_servers += 1
+                else:
+                    while self.num_servers % self.model.num_layers != 0:
+                        self.num_servers += 1
             self.total_mem = self.num_servers * self.server.total_mem
         # udpate the kv cache ratio using the number of servers, or max TCO
         elif self.num_servers or self.max_tco:
@@ -73,7 +82,8 @@ class System(Base):
             raise ValueError('Please provide one of kv_cache_ratio, max_ctx_len_batch_a, num_servers or max_tco.')
         self.kv_cache_ratio = 1 - self.model.model_size_byte / self.total_mem
         kv_cache_mem = self.kv_cache_ratio * self.total_mem
-        self.max_ctx_len_batch_1 = math.floor(kv_cache_mem / self.model.kv_cache_size_per_token_byte)
+        if self.max_ctx_len_batch_1 == None:
+            self.max_ctx_len_batch_1 = math.floor(kv_cache_mem / self.model.kv_cache_size_per_token_byte)
         self.max_tco = self.server.tco.total * self.num_servers
         self.num_packages = self.num_servers * self.server.num_packages
         self.num_chips = self.num_servers * self.server.num_chips
@@ -95,47 +105,40 @@ class System(Base):
         return True
 
     def _software_update(self) -> None:
+        self.batch_prefill_opt_lat = dict()
+        self.batch_prefill_opt_tco = dict()
+        self.batch_generate_opt_lat = dict()
+        self.batch_generate_opt_tco = dict()
+
         batch = 1
-        overall_opt_prefill_latency = float('inf')
-        overall_opt_generate_throughput = 0.0
-        self.batches_generate_throughput_opt_mapping = {}
-        self.batches_prefill_latency_opt_mapping = {}
         while batch <= self.max_batch:
-            # prefill latency optimization
+            # prefill optimization
             # from deepspeed inference, we should use large micro batch size for prefill and small micro batch size for generate
-            batch_opt_prefill_latency = float('inf')
+            batch_prefill_opt_lat = float('inf')
+            batch_prefill_opt_tco = float('inf')
             mappings = self.gen_mappings(batch=batch, min_ctx_len=self.prefill_eval_ctx_len+1)
             for mapping in mappings:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.prefill_eval_ctx_len, generate_len=1, update_on_init=False)
                 perf.prefill_eval()
-                prefill_latency = perf.prefill_latency
-                if prefill_latency < batch_opt_prefill_latency:
-                    batch_opt_prefill_latency = prefill_latency
-                    self.batches_prefill_latency_opt_mapping[batch] = mapping   
-                    if prefill_latency < overall_opt_prefill_latency:
-                        overall_opt_prefill_latency = prefill_latency
-                        self.prefill_latency_opt_perf = perf
-
-            # generate throughput optimization
-            batch_opt_generate_throughput = 0.0
-            for mapping in self.gen_mappings(batch=batch, min_ctx_len=256):
+                if perf.prefill_latency < batch_prefill_opt_lat:
+                    batch_prefill_opt_lat = perf.prefill_latency
+                    self.batch_prefill_opt_lat[batch] = perf
+                if perf.prefill_tco_per_token < batch_prefill_opt_tco:
+                    batch_prefill_opt_tco = perf.prefill_tco_per_token
+                    self.batch_prefill_opt_tco[batch] = perf
+            # generate optimization
+            batch_generate_opt_lat = float('inf')
+            batch_generate_opt_tco = float('inf')
+            for mapping in self.gen_mappings(batch=batch, min_ctx_len=self.generate_eval_prefill_len+self.generate_eval_generate_len):
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.generate_eval_prefill_len, generate_len=self.generate_eval_generate_len, update_on_init=False)
                 perf.generate_eval()
-                generate_throughput = perf.generate_throughput
-                if generate_throughput > batch_opt_generate_throughput:
-                    batch_opt_generate_throughput = generate_throughput
-                    self.batches_generate_throughput_opt_mapping[batch] = mapping
-                    if generate_throughput > overall_opt_generate_throughput:
-                        overall_opt_generate_throughput = generate_throughput
-                        self.generate_throughput_opt_perf = perf
+                if perf.generate_latency < batch_generate_opt_lat:
+                    batch_generate_opt_lat = perf.generate_latency
+                    self.batch_generate_opt_lat[batch] = perf
+                if perf.generate_tco_per_token < batch_generate_opt_tco: 
+                    batch_generate_opt_tco = perf.generate_tco_per_token
+                    self.batch_generate_opt_tco[batch] = perf
             batch *= 2
-        
-        if self.prefill_latency_opt_perf:
-            self.prefill_latency_opt_perf.update_on_init = True
-            self.prefill_latency_opt_perf.update()
-        if self.generate_throughput_opt_perf:
-            self.generate_throughput_opt_perf.update_on_init = True
-            self.generate_throughput_opt_perf.update()
 
     def gen_mappings(self, batch: int, min_ctx_len: int) -> list[Mapping]:
         valid_mappings = []
@@ -163,8 +166,8 @@ class System(Base):
             else:
                 t_chip = t_pkg * self.server.package.num_chips # int
                 # either t_chip should be a divisor of num_heads, or num_heads should be a divisor of t_chip
-                if self.model.num_heads % t_chip != 0 and t_chip % self.model.num_heads != 0:
-                    continue
+                # if self.model.num_heads % t_chip != 0 and t_chip % self.model.num_heads != 0:
+                #     continue
                 # iterate through all possible micro batch sizes
                 micro_batch = 1
                 while micro_batch <= batch:
@@ -172,5 +175,4 @@ class System(Base):
                     micro_batch *= 2
 
         return valid_mappings
-
 

@@ -41,9 +41,12 @@ class Package(Base):
     invalid_reason: Optional[str] = None
 
     def update(self) -> None:
-        # HBM requires silicon interposer
-        if self.si == None and self.hbm:
+        if self.hbm:
+            # HBM requires silicon interposer
             self.si = True
+        elif self.num_chips == 1:
+            # 1 chip per package doesn't need silicon interposer
+            self.si = False
         self.io = replace(self.chip.pkg2pkg_io)
         self.io.num = self.num_chips * self.chip.pkg2pkg_io.num
         self.io.update()

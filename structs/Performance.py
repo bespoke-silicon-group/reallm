@@ -27,7 +27,7 @@ class Performance(Base):
     prefill_core_energy: Optional[Energy] = None # prefill total core energy
     prefill_power: Optional[float] = None # prefill power, in watts
     prefill_srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
-    prefill_tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
+    prefill_tco_per_token: Optional[float] = None # TCO per token during prefill, in $/token
 
     generate_latency: Optional[float] = None # generate latency for generate_len tokens, in sec
     generate_throughput: Optional[float] = None # the peak throughput of generate stage, in tokens/sec
@@ -36,7 +36,7 @@ class Performance(Base):
     generate_core_energy: Optional[Energy] = None # generate total core energy
     generate_power: Optional[float] = None # generate power, in watts
     generate_srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
-    generate_tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
+    generate_tco_per_token: Optional[float] = None # TCO per token during generate, in $/token
 
     srv_tco: Optional[TCO] = None # TCO given the generate utilization, per server
     tco_per_token: Optional[float] = None # TCO per token at the peak generate throughput, in $/token
@@ -55,8 +55,9 @@ class Performance(Base):
             self.tco_per_token = self.generate_tco_per_token
     
     def prefill_eval(self) -> None:
+        # micro batch size for prefill is always 1
         micro_batch_latency = self._get_micro_batch_latency('prefill')
-        self.prefill_latency = micro_batch_latency.total + (self.batch / self.mapping.micro_batch - 1) * micro_batch_latency.pipeline_stage
+        self.prefill_latency = micro_batch_latency.total + (self.batch - 1) * micro_batch_latency.pipeline_stage
         self.prefill_throughput = self.batch * self.prefill_len / self.prefill_latency
 
         sys_peak_flops = self.system.perf * self.prefill_latency
@@ -200,19 +201,20 @@ class Performance(Base):
         # FC: 1 in Q,K,V projection, 1 in post-atten, 1 in FF1, 4 in FF2
         # Matmul: 2 in attention matmul
         if stage == 'prefill':
-            num_acts_per_layer_fc = 7 * d_model * self.prefill_len * self.mapping.micro_batch
-            num_acts_per_layer_matmul = 2 * d_model * self.prefill_len * self.mapping.micro_batch
+            # prefill micro batch size is always 1
+            num_acts_per_layer_fc = 7 * d_model * self.prefill_len * 1
+            num_acts_per_layer_matmul = 2 * d_model * self.prefill_len * 1
             num_acts_per_layer = num_acts_per_layer_fc + num_acts_per_layer_matmul
             num_acts_total = n_layers * num_acts_per_layer
 
             num_kvcache_per_layer = 2 * d_model * self.prefill_len
             num_kvcache_total = n_layers * num_kvcache_per_layer
 
-            gemm_fma_energy = num_weights_total * self.prefill_len * self.mapping.micro_batch * EnergyConstants.fma_fp16
-            matmul_fma_energy = num_kvcache_total * self.prefill_len * self.mapping.micro_batch * EnergyConstants.fma_fp16
+            gemm_fma_energy = num_weights_total * self.prefill_len * 1 * EnergyConstants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * self.prefill_len * 1 * EnergyConstants.fma_fp16
 
             # 2 all-reduce per layer
-            num_allreduce_per_layer = 2 * d_model * self.prefill_len * self.mapping.micro_batch * self.mapping.t
+            num_allreduce_per_layer = 2 * d_model * self.prefill_len * 1 * self.mapping.t
             num_allreduce_total = n_layers * num_allreduce_per_layer
 
         elif stage == 'generate':
@@ -244,7 +246,7 @@ class Performance(Base):
         comm_energy = num_allreduce_total * bytes_per_word * link_pj_per_byte
 
         if stage == 'prefill':
-            num_iters = self.batch / self.mapping.micro_batch
+            num_iters = self.batch
         elif stage == 'generate':
             num_iters = self.batch / self.mapping.micro_batch * self.generate_len
 
@@ -265,7 +267,8 @@ class Performance(Base):
         data_bytes = self.system.model.bytes_per_number
 
         if stage == 'prefill':
-            activation_row = self.mapping.micro_batch * self.prefill_len
+            # micro batch size for prefill is always 1
+            activation_row = self.prefill_len
             atten_activation_row = activation_row
         else:
             activation_row = self.mapping.micro_batch
