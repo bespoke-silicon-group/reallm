@@ -1,23 +1,44 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class ChipConstants():
     # SRAM density mm2/MB, data from real implementations
-    sram_density: float = 0.45
-    # MACs density mm2/Tera BF16 ops, data from real implementations
-    macs_density: float = 2.65
+    # sram_density: float = 0.45
+    # MACs density mm2/Tera BF16 ops
+    # macs_density: float = 2.65 # data from whole chip implementations
+    # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
+    # TPUv4i: 100mm2 MXU for 138TOPS --> 0.72mm2/TOPS
+    # macs_density: float = 1.0
     # Power Model, W/Tera BF16 ops
-    w_per_tops: float = 1.3
+    # w_per_tops: float = 1.3
 
     max_die_area: int = 900
     D0: float = 0.001 # defects/mm2 = defects/cm2/100
-    alpha: float = 26.0
+    alpha: float = 10.0 # critical level
     wafer_diameter: int = 300 # in mm
     wafer_dicing_gap: float = 0.1 # in mm
     wafer_cost: int = 10000 # in $
     testing_cost_overhead: float = 0.01 # testing add 0.01 cost per die
 
     max_power_density: float = 1.0 # Watts/mm2
+
+@dataclass
+class PackageConstants():
+    max_die_area: float = 1400 # A100 is around 1400mm2
+    # organic substrate
+    os_area_scale_factor: float = 4.0
+    os_cost_per_mm2: float = 0.005
+    # if there's more than one chips in a package, the cost will be multiplied by the factor, 
+    # which depends on the package area: {area_threshold: cost_factor}
+    os_layer_scale_factor: dict = field(default_factory=lambda: {30*30: 2, 17*17: 1.75, 0: 1.0})
+    os_bonding_yield: float = 0.99
+    c4_bump_cost_per_mm2: float = 0.005
+    # silicon interposer
+    si_area_scale_factor: float = 1.1
+    si_wafer_cost: float = 1937.0 # $/wafer for 55nm technology
+    si_bonding_yield: float = 0.95
+    si_D0: float = 0.0007 # defects/mm2 = defects/cm2/100
+    si_alpha: float = 6.0 # critical level
 
 @dataclass
 class ServerConstants():
@@ -29,8 +50,8 @@ class ServerConstants():
     DCDCEfficiency = 0.95     # 5% loss
     FanPower = 7.4            # W/each
     FanCost = 15.0
-    APPPower = 10.0           # W (Application Processor + DRAM)
-    APPCost = 10.0            # $ (Application Processor + DRAM)
+    APPPower = 50.0           # W (Application Processor + Srv DRAM), on average
+    APPCost = 200.0           # $ (Application Processor + Srv DRAM)
     # PSU
     PSUCostPerW = 0.13        # $/W
     PSUEfficiency = 0.95      # 5% loss
@@ -43,7 +64,8 @@ class ServerConstants():
     EthernetCost = 450.0      # $ for 100 GigE
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
-    SrvLanes = 8              # lanes per server
+    LaneAreaMin = 400.0       # mm2
+    LaneAreaMax = 6000.0      # mm2
 
 @dataclass
 class TCOConstants():
@@ -56,8 +78,22 @@ class TCOConstants():
     SrvOpexRate = 0.05         # % of server amortization
     SrvAvgPwr = 1.0            # Server Average Power Relative to Peak,,
 
+Joules = float
+PicoJoules = float
+@dataclass
+class EnergyConstants:
+    # per byte
+    sram_wgt: PicoJoules = 1.25 # large SRAM, for weight
+    sram_act: PicoJoules = 7.5/8 # small SRAM, for activation, from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
+    dram: PicoJoules = 80.0
+    hbm2: PicoJoules = 31.2
+    stacked_dram: PicoJoules = 18.72
 
+    # fma_fp16: PicoJoules = 2.75
+    # fma_fp16: PicoJoules = 0.16 + 0.34 # from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
+    fma_fp16: PicoJoules = 1.3 # from slides 17 of https://hc33.hotchips.org/assets/program/conference/day2/HC2021.Graphcore.SimonKnowles.v04.pdf
 
+ChipConstants7nm = ChipConstants()
+PackageConstantsCommon = PackageConstants()
 ServerConstantsCommon = ServerConstants()
 TCOConstantsCommon = TCOConstants()
-ChipConstants7nm = ChipConstants()

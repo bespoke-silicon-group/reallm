@@ -1,0 +1,5 @@
+Model:
+  name: 'megatron'
+  num_layers: 72
+  d: 3072
+  num_heads: 32

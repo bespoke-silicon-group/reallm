@@ -1,0 +1,6 @@
+Model:
+  name: 'palm'
+  num_layers: 118
+  d: 18432
+  num_heads: 48
+  heads_per_kv_cache: 48 

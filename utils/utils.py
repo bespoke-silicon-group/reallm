@@ -1,11 +1,14 @@
 from structs.Server import Server
 from typing import Any, Dict, List, Optional
 
-chip_header = ['sram_mb', 
+chip_header = [
+               'area',
+               'sram_mb', 
                'tops',
                'sram_bw_TB_per_sec',
+               'sram_area',
+               'mac_area',
                'tdp',
-               'area',
                'cost',
                ]
 pkg_header = []
@@ -28,23 +31,16 @@ extra_header = ['cost_per_tops', 'watts_per_tops', 'tco_per_tops',
 csv_header = [chip_header, srv_header, tco_header, extra_header]
 
 def fprintHeader(o_file):
-  i = 1
-  o_file.write('# ')
   for h in chip_header:
-    o_file.write('[{0:d}]{1:s}, '.format(i, 'chip_'+h))
-    i += 1
+    o_file.write('{0:s}, '.format('chip_'+h))
   for h in pkg_header:
-    o_file.write('[{0:d}]{1:s}, '.format(i, 'pkg_'+h))
-    i += 1
+    o_file.write('{0:s}, '.format('pkg_'+h))
   for h in srv_header:
-    o_file.write('[{0:d}]{1:s}, '.format(i, 'srv_'+h))
-    i += 1
+    o_file.write('{0:s}, '.format('srv_'+h))
   for h in tco_header:
-    o_file.write('[{0:d}]{1:s}, '.format(i, 'tco_'+h))
-    i += 1
+    o_file.write('{0:s}, '.format('tco_'+h))
   for h in extra_header:
-    o_file.write('[{0:d}]{1:s}, '.format(i, h))
-    i += 1
+    o_file.write('{0:s}, '.format(h))
   o_file.write('\n')
 
 def fprintData(o_file, servers: List[Server]) -> None:
@@ -80,7 +76,7 @@ def extra_specs_calculator (server: Server) -> Dict[str, Any]:
     'hs_max_power'     : server.hs.max_power,
     'cost_all_package' : server.package.cost * server.num_packages,
     'cost_all_hs'      : server.hs.cost * server.num_packages,
-    'cost_all_fans'    : server.constants.FanCost * server.constants.SrvLanes,
+    'cost_all_fans'    : server.constants.FanCost * server.num_lanes,
     'cost_ethernet'    : server.constants.EthernetCost,
     'cost_dcdc'        : server.cost_dcdc,
     'cost_psu'         : server.cost_psu,

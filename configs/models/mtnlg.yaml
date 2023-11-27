@@ -1,0 +1,5 @@
+Model:
+  name: 'mtnlg'
+  num_layers: 105
+  d: 20480
+  num_heads: 128
