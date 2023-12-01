@@ -1,5 +1,5 @@
 from dataclasses import dataclass, fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 @dataclass
 class Base:
@@ -13,3 +13,5 @@ class Base:
         if filter_keys:
             [dc_dict.pop(k) for k in list(dc_dict.keys()) if k not in filter_keys]
         return dc_dict
+    
+TensorShape = Tuple[int, ...]

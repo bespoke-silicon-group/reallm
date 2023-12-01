@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING, Tuple
-from .Base import Base
+from .Base import Base, TensorShape
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
@@ -269,9 +269,10 @@ class Performance(Base):
         if stage == 'prefill':
             # micro batch size for prefill is always 1
             activation_row = self.prefill_len
+            micro_batch = 1
             atten_activation_row = activation_row
         else:
-            activation_row = self.mapping.micro_batch
+            micro_batch = activation_row = self.mapping.micro_batch
             atten_activation_row = activation_row * (self.prefill_len + self.generate_len / 2)
             if self.asplos_version:
                 atten_activation_row = activation_row * 20
@@ -327,15 +328,19 @@ class Performance(Base):
         # all chips get the complete activation of size (activation_row, d)
         # each chip has weight of size (d, 3d/t) --> d rows, 3d/t cols
         # so for each chip, we have (activation_row, d) * (d, 3d/t)
-        atten_qkv_latency = self._get_matmul_latency(activation_row, d, math.ceil(3 * d / t), chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        A = (activation_row, d)
+        B = (d, math.ceil(3 * d / t))
+        atten_qkv_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
         ##################################################################
-        # attention matmul: Q * K_T, (micro_batch * ctx_len, d / t) * (d / t, micro_batch * ctx_len)
-        # atten_matmul1_latency = self._get_matmul_latency(atten_activation_row, d / t, atten_activation_row, chip_perf, self.system.kv_bw_per_chip, data_bytes)
+        # attention matmul: Q * K_T, (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
         # in ASPLOS submission
         if self.asplos_version:
-            atten_matmul1_latency = self._get_matmul_latency(1, d / t, atten_activation_row, chip_perf, self.system.kv_bw_per_chip, data_bytes)
+            A = (micro_batch, 1, d / t)
+            B = (micro_batch, d / t, atten_activation_row)
         else:
-            atten_matmul1_latency = self._get_matmul_latency(1, math.ceil(d / t), atten_activation_row, chip_perf, self.system.kv_bw_per_chip, data_bytes)
+            A = (micro_batch, 1, math.ceil(d / t))
+            B = (micro_batch, math.ceil(d / t), atten_activation_row)
+        atten_matmul1_latency = self._get_matmul_latency(A, B, chip_perf, self.system.kv_bw_per_chip, data_bytes)
         if t > self.system.model.num_heads:
             # DOUBLE CHECK HERE
             chips_per_head = int(t / self.system.model.num_heads)
@@ -343,10 +348,10 @@ class Performance(Base):
         else:
             atten_communication_latency_1 = 0.0
         ##################################################################
-        # attention matmul: (Q * K_T) * V, (micro_batch * ctx_len, micro_batch * ctx_len) * (micro_batch * ctx_len, d / t)
-        # atten_matmul2_latency = self._get_matmul_latency(atten_activation_row, atten_activation_row, d / t, chip_perf, self.system.weight_bw_per_chip, data_bytes)
-        # in ASPLOS submission
-        atten_matmul2_latency = self._get_matmul_latency(1, atten_activation_row, math.ceil(d / t), chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        # attention matmul: S * V, (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
+        A = (micro_batch, 1, atten_activation_row)
+        B = (micro_batch, atten_activation_row, math.ceil(d / t))
+        atten_matmul2_latency = self._get_matmul_latency(A, B, chip_perf, self.system.kv_bw_per_chip, data_bytes)
         # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
         # it is able to compute part of the atten_out O
         ##################################################################
@@ -354,7 +359,9 @@ class Performance(Base):
         # each chip get the activation of size (activation_row, d/t)
         # each chip has weight of size (d/t, d) --> d/t rows, d cols, 
         # so for each chip, we have (activation_row, d/t) * (d/t, d)
-        atten_fc_latency = self._get_matmul_latency(activation_row, math.ceil(d / t), d, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        A = (activation_row, math.ceil(d / t))
+        B = (math.ceil(d / t), d)
+        atten_fc_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
         atten_all_to_all_latency = self._get_ring_all_reduce_latency(t, d * data_bytes, collective_links) / 2 # half of the latency of all-reduce
@@ -373,13 +380,17 @@ class Performance(Base):
         # all chips get the whole activation of size (activation_row, d)
         # each chip has weight of size (d, 4d/t) --> d rows, 4d/t cols
         # so for each chip we have (activation_row, d) * (d, 4d/t)
-        fc1_latency = self._get_matmul_latency(activation_row, d, math.ceil(4 * d / t), chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        A = (activation_row, d)
+        B = (d, math.ceil(4 * d / t))
+        fc1_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
         ##################################################################
         # FC 2
         # each chip get the activation of size (activation_row, 4d/t)
         # each chip has weight of size (4d/t, d) --> 4d/t rows, d cols, 
         # each for chip we have (activation_row, 4d/t) * (4d/t, d)
-        fc2_latency = self._get_matmul_latency(activation_row, math.ceil(4 * d / t), d, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        A = (activation_row, math.ceil(4 * d / t))
+        B = (math.ceil(4 * d / t), d)
+        fc2_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
         ##################################################################
         # all-reduce
         # We adopt the same partitioning scheme as EFFICIENTLY SCALING TRANSFORMER INFERENCE
@@ -408,24 +419,37 @@ class Performance(Base):
 
         return micro_batch_latency 
     
-    def _get_matmul_latency(self, m: int, n: int, k: int, flops: int, weight_bw: int, data_bytes: int = 2, util: float = 1.0) -> float:
+    def _get_matmul_latency(self, A: TensorShape, B: TensorShape, flops: int, weight_bw: int, data_bytes: int = 2, util: float = 1.0) -> float:
         """
-        Get the latency of a matrix multiplication (m, n) * (n, k) = (m, k).
+        Get the latency of a matrix multiplication A * B, based on Scott Davidson's code.
+        A: [..., m, n]
+        B: [..., n, k]
+        The first few dimensions ... in the two tensors should be the same, meaning multiple 2-D matrix multiplications
 
-        :param m: the number of rows of the first matrix
-        :param n: the number of columns of the first matrix and the number of rows of the second matrix
-        :param k: the number of columns of the second matrix
+        :param A: the shape of the first matrix
+        :param B: the shape of the second matrix
         :param flops: the number of floating point operations per second
-        :param weight_bw: the bandwidth of the weight transfer (the second matrix (n, k)), in bytes/sec
+        :param weight_bw: the bandwidth of the weight transfer (the second matrix B), in bytes/sec
         :param data_bytes: the number of bytes per number
         :param util: the utilization, assume it's 1.0 for now
         :return: the latency of the matrix multiplication, in sec
         """
+        assert len(A) == len(B)
+        assert len(A) >= 2
+        assert A[-1] == B[-2]
+
+        m, n, k = A[-2], A[-1], B[-1]
+        if len(A) > 2:
+            num_matrices = math.prod(A[:-2])
+        else:
+            num_matrices = 1
+
         compute_delay = m * n * k * 2 / flops / util # 2 means 2 flops per mac
         if self.asplos_version:
             weight_bw *= 1.024
         memory_delay = n * k * data_bytes / weight_bw
-        return max(compute_delay, memory_delay)
+
+        return num_matrices * max(compute_delay, memory_delay)
 
 
     def _get_ring_all_reduce_latency(self, num_nodes: int, num_bytes: int, collective_links: list[IO] | IO) -> float:
