@@ -12,6 +12,17 @@ This methodology not only accurately explores a spectrum of major design trade-o
 
 The first phase is the hardware exploration flow which performs a bottom-up, LLM agnostic design space exploration generating thousands of realizable Chiplet Cloud server designs.
 
+To kick off the hardware exploration follow these steps:
+
+1. Create a hardware configuration YAML file in the `configs/hardware` directory. We've provided two examples for reference: cc.yaml for Chiplet Cloud style exploration and tpuv4i.yaml for Google's TPU v4i.
+2. Add the hardware target name to the Makefile.
+3. Run the command `make <HW_TARGET_NAME>.hw` to initiate the hardware exploration.
+
+
 * Software Evaluation
 
 The second phase is the software evaluation flow which takes the realizable server design points along with a generative LLM specification to perform software optimized inference simulations and TCO estimations to find Pareto optimal Chiplet Cloud design points.
+
+Create the target model TAML file in the `configs/models` directory and add the model name to the Makefile. We have provided 8 popular models on the market.
+
+Run the command `make <HW_TARGET_NAME>.sw.<SW_MODEL_NAME>` to start the software evaluation.
