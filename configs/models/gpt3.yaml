@@ -1,0 +1,5 @@
+Model:
+  name: 'gpt3'
+  num_layers: 96
+  d: 12288
+  num_heads: 96

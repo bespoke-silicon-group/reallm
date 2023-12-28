@@ -1,0 +1,5 @@
+Model:
+  name: 'gopher'
+  num_layers: 80
+  d: 16328
+  num_heads: 128

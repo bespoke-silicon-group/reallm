@@ -1,0 +1,5 @@
+Model:
+  name: 'bloom'
+  num_layers: 70
+  d: 14336
+  num_heads: 112

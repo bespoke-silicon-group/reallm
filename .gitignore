@@ -1,0 +1,17 @@
+basejump_stl/
+bsg_cadenv/
+DVEfiles/
+out/
+results/
+outputs/
+.vscode/
+*.vpd
+*.swp
+*.pyc
+*.log
+*.csv
+*.pdf
+ucli.key
+vc_hdrs.h
+.ipynb_checkpoints
+__pycache__

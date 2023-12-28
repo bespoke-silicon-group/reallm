@@ -1,0 +1,5 @@
+Model:
+  name: 'gpt2'
+  num_layers: 48
+  d: 1600
+  num_heads: 25
