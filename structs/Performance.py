@@ -7,9 +7,12 @@ from .IO import IO
 from .TCO import TCO
 from .Constants import Joules, EnergyConstants
 import math
+import json
 
 if TYPE_CHECKING:
     from .System import System
+    from .Chip import Chip
+    from .Package import Package
 
 @dataclass
 class Performance(Base):
@@ -265,6 +268,8 @@ class Performance(Base):
         d = self.system.model.d
         t = self.mapping.t
         data_bytes = self.system.model.bytes_per_number
+        hbm_stacks_per_chip = int(self.system.server.package.num_hbm_stacks / self.system.server.package.num_chips)
+        dram_config = self.system.server.package.hbm.config_dir + f'/{hbm_stacks_per_chip}_stack.ini'
 
         if stage == 'prefill':
             # micro batch size for prefill is always 1
@@ -278,8 +283,6 @@ class Performance(Base):
                 atten_activation_row = activation_row * 20
         activation_col = d
         activation_size = activation_row * activation_col
-
-        chip_perf = self.system.server.package.chip.perf # in flops/sec
 
         t_srv = self.system.num_servers / self.mapping.p # number of servers per pipeline stage
         t_pkg = self.system.server.num_packages * t_srv # number of packages per pipeline stage
@@ -330,7 +333,7 @@ class Performance(Base):
         # so for each chip, we have (activation_row, d) * (d, 3d/t)
         A = (activation_row, d)
         B = (d, math.ceil(3 * d / t))
-        atten_qkv_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
         ##################################################################
         # attention matmul: Q * K_T, (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
         # in ASPLOS submission
@@ -340,7 +343,7 @@ class Performance(Base):
         else:
             A = (micro_batch, 1, math.ceil(d / t))
             B = (micro_batch, math.ceil(d / t), atten_activation_row)
-        atten_matmul1_latency = self._get_matmul_latency(A, B, chip_perf, self.system.kv_bw_per_chip, data_bytes)
+        atten_matmul1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip, dram_config)
         if t > self.system.model.num_heads:
             # DOUBLE CHECK HERE
             chips_per_head = int(t / self.system.model.num_heads)
@@ -351,7 +354,7 @@ class Performance(Base):
         # attention matmul: S * V, (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
         A = (micro_batch, 1, atten_activation_row)
         B = (micro_batch, atten_activation_row, math.ceil(d / t))
-        atten_matmul2_latency = self._get_matmul_latency(A, B, chip_perf, self.system.kv_bw_per_chip, data_bytes)
+        atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip, dram_config)
         # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
         # it is able to compute part of the atten_out O
         ##################################################################
@@ -361,7 +364,7 @@ class Performance(Base):
         # so for each chip, we have (activation_row, d/t) * (d/t, d)
         A = (activation_row, math.ceil(d / t))
         B = (math.ceil(d / t), d)
-        atten_fc_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
         atten_all_to_all_latency = self._get_ring_all_reduce_latency(t, d * data_bytes, collective_links) / 2 # half of the latency of all-reduce
@@ -382,7 +385,7 @@ class Performance(Base):
         # so for each chip we have (activation_row, d) * (d, 4d/t)
         A = (activation_row, d)
         B = (d, math.ceil(4 * d / t))
-        fc1_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        fc1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
         ##################################################################
         # FC 2
         # each chip get the activation of size (activation_row, 4d/t)
@@ -390,7 +393,7 @@ class Performance(Base):
         # each for chip we have (activation_row, 4d/t) * (4d/t, d)
         A = (activation_row, math.ceil(4 * d / t))
         B = (math.ceil(4 * d / t), d)
-        fc2_latency = self._get_matmul_latency(A, B, chip_perf, self.system.weight_bw_per_chip, data_bytes)
+        fc2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
         ##################################################################
         # all-reduce
         # We adopt the same partitioning scheme as EFFICIENTLY SCALING TRANSFORMER INFERENCE
@@ -418,38 +421,6 @@ class Performance(Base):
                                                 fc_communication_latency)
 
         return micro_batch_latency 
-    
-    def _get_matmul_latency(self, A: TensorShape, B: TensorShape, flops: int, weight_bw: int, data_bytes: int = 2, util: float = 1.0) -> float:
-        """
-        Get the latency of a matrix multiplication A * B, based on Scott Davidson's code.
-        A: [..., m, n]
-        B: [..., n, k]
-        The first few dimensions ... in the two tensors should be the same, meaning multiple 2-D matrix multiplications
-
-        :param A: the shape of the first matrix
-        :param B: the shape of the second matrix
-        :param flops: the number of floating point operations per second
-        :param weight_bw: the bandwidth of the weight transfer (the second matrix B), in bytes/sec
-        :param data_bytes: the number of bytes per number
-        :param util: the utilization, assume it's 1.0 for now
-        :return: the latency of the matrix multiplication, in sec
-        """
-        assert len(A) == len(B)
-        assert len(A) >= 2
-        assert A[-1] == B[-2]
-
-        m, n, k = A[-2], A[-1], B[-1]
-        if len(A) > 2:
-            num_matrices = math.prod(A[:-2])
-        else:
-            num_matrices = 1
-
-        compute_delay = m * n * k * 2 / flops / util # 2 means 2 flops per mac
-        if self.asplos_version:
-            weight_bw *= 1.024
-        memory_delay = n * k * data_bytes / weight_bw
-
-        return num_matrices * max(compute_delay, memory_delay)
 
 
     def _get_ring_all_reduce_latency(self, num_nodes: int, num_bytes: int, collective_links: list[IO] | IO) -> float:
@@ -485,18 +456,147 @@ class Performance(Base):
         return all_reduce_time
     
 @dataclass
+class MatmulLatency(Base):
+    """
+    Get the latency of a matrix multiplication A * B, based on Scott Davidson's code.
+    A: [..., m, n]
+    B: [..., n, k]
+    The first few dimensions ... in the two tensors should be the same, meaning multiple 2-D matrix multiplications
+    """
+    A: TensorShape
+    B: TensorShape
+    chip: Chip
+    weight_bw: int
+    dram_config: str
+    data_bytes: int = 2
+    data_flow: str = 'WS' # weight stationary
+    bw_dict_path: str = 'mem_sim/bw_dict.json'
+
+    # derived metrics
+    I: Optional[int] = None
+    J: Optional[int] = None
+    K: Optional[int] = None
+    K_per_core: Optional[int] = None
+
+    I_hat: Optional[int] = None
+    J_hat: Optional[int] = None
+    K_hat: Optional[int] = None
+
+    I_bar: Optional[int] = None
+    J_bar: Optional[int] = None
+    K_bar: Optional[int] = None
+
+    A_shape: Optional[TensorShape] = None
+    B_shape: Optional[TensorShape] = None
+    O_shape: Optional[TensorShape] = None
+
+    block_ldst_time: Optional[float] = None
+    block_comp_time: Optional[float] = None
+
+    num_ops: Optional[int] = None
+    utilization: Optional[float] = None
+    time: Optional[float] = None
+
+    def update(self) -> None:
+        if self.data_flow == 'WS':
+            assert len(self.A) == len(self.B)
+            assert len(self.A) >= 2
+            assert self.A[-1] == self.B[-2]
+            self.I = self.A[-2]
+            self.J = self.A[-1]
+            self.K = self.B[-1]
+            if len(self.A) > 2:
+                stacks = math.prod(self.A[:-2])
+            else:
+                stacks = 1
+            
+            if stacks > self.chip.num_sa:
+                stacks_per_core = math.ceil(stacks / self.chip.num_sa)
+                self.K_per_core = self.K
+            else:
+                stacks_per_core = 1
+                cores_per_stack = math.floor(self.chip.num_sa / stacks)
+                self.K_per_core = math.ceil(self.K / cores_per_stack)
+            
+            self.I_hat = math.ceil(self.I / self.chip.acc_depth / 2)
+            self.J_hat = math.ceil(self.J / self.chip.sa_width)
+            self.K_hat = math.ceil(self.K_per_core / self.chip.sa_width)
+
+            self.I_bar = math.ceil(self.I / self.I_hat) # used to be called S
+            self.J_bar = math.ceil(self.J / self.J_hat) # account for partial block in the SA
+            self.K_bar = math.ceil(self.K_per_core / self.K_hat) # account for partial block in the SA
+
+            self.A_shape = (stacks_per_core, self.I_hat, self.J_hat, self.I_bar, self.J_bar)
+            self.B_shape = (stacks_per_core, self.J_hat, self.K_hat, self.J_bar, self.K_bar)
+            self.O_shape = (stacks_per_core, self.I_hat, self.K_hat, self.I_bar, self.K_bar)
+
+            dramsim_bw = self._get_bw()
+            print(f'channels = {self.chip.hbm_channels}, dramsim3_bw = {dramsim_bw} GB/s, peak_bw = {self.weight_bw / 1024/1024/1024} GB/s, ratio = {dramsim_bw / (self.weight_bw / 1024/1024/1024)}')
+            self.block_ldst_time = (self.J_bar * self.K_bar) / self.weight_bw
+            self.block_comp_time = math.ceil(max(2 * self.chip.sa_width + self.I_bar, 2 * self.I_bar) / 2) / self.chip.freq
+            max_block_time = max(self.block_ldst_time, self.block_comp_time)
+
+            self.time = stacks_per_core * (self.block_ldst_time + self.block_comp_time + (self.I_hat * self.J_hat * self.K_hat - 1) * max_block_time)
+            
+            self.num_ops = stacks * self.I * self.J * self.K * 2
+            self.unitilization = self.num_ops / (self.time * self.chip.perf)
+        else:
+            raise NotImplementedError
+    
+    def _get_bw(self) -> float:
+        with open(self.bw_dict_path) as json_file:
+            bw_dict = json.load(json_file)
+        sa_width = self.chip.sa_width
+        config = self.dram_config
+        bw = bw_dict[config][str(sa_width)]
+        return bw
+
+    # def _call_dramsim3(self) -> float:
+    #     num_bytes = self.J_bar * self.K_bar * self.data_bytes
+
+    #     config = configparser.ConfigParser()
+    #     config.read(self.dram_config)
+    #     channels = int(config.get('system', 'channels'))
+    #     bus_bits = int(config.get('system', 'bus_width'))
+    #     total_bus_bytes = channels * bus_bits / 8
+    #     columns = int(config.get('dram_structure', 'columns'))
+
+    #     num_cycles = math.ceil(num_bytes / total_bus_bytes) * 100
+
+    #     addr = 0
+    #     base_cycle = 0
+
+    #     f = open('trace.txt', 'w')
+    #     for cyc in range(num_cycles):
+    #         for ch in range(channels):
+    #             f.write(f'{hex(addr)} READ {base_cycle + cyc}\n')
+    #             addr += columns
+    #     f.close()
+        
+    #     sim_cycles = num_cycles + 1
+    #     os.system(f'make -s -f dramsim3.mak run CONFIG={self.dram_config} TRACE=trace.txt CYCLE={sim_cycles}')
+ 
+    #     with open('dramsim3.json') as json_file:
+    #         data = json.load(json_file)
+    #         tot_bw = 0.0
+    #         for ch in range(channels):
+    #             tot_bw += data[str(ch)]['average_bandwidth']
+
+    #     return tot_bw
+
+@dataclass
 class MicroBatchLatency(Base):
     p: int
     num_layers: int
     stage2stage: float
-    atten_qkv: float
-    atten_matmul1: float
+    atten_qkv: MatmulLatency
+    atten_matmul1: MatmulLatency
     atten_communication1: float
-    atten_matmul2: float
-    atten_fc: float
+    atten_matmul2: MatmulLatency
+    atten_fc: MatmulLatency
     atten_communication2: float
-    fc1: float
-    fc2: float
+    fc1: MatmulLatency
+    fc2: MatmulLatency
     fc_communication: float
 
     # derived metrics
@@ -522,7 +622,7 @@ class MicroBatchLatency(Base):
     communication_us: Optional[float] = None
 
     def update(self) -> None:
-        layer_compute = self.atten_qkv + self.atten_matmul1 + self.atten_matmul2 + self.atten_fc + self.fc1 + self.fc2
+        layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
         layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
         self.pipeline_stage = (layer_compute + layer_communication) * (self.num_layers / self.p) + self.stage2stage
         self.total = self.pipeline_stage * self.p
@@ -531,14 +631,14 @@ class MicroBatchLatency(Base):
         self.utilization = self.compute / self.total
 
         self.stage2stage_us = self.stage2stage * 1e6
-        self.atten_qkv_us = self.atten_qkv * 1e6
-        self.atten_matmul1_us = self.atten_matmul1 * 1e6
+        self.atten_qkv_us = self.atten_qkv.time * 1e6
+        self.atten_matmul1_us = self.atten_matmul1.time * 1e6
         self.atten_communication1_us = self.atten_communication1 * 1e6
-        self.atten_matmul2_us = self.atten_matmul2 * 1e6
-        self.atten_fc_us = self.atten_fc * 1e6
+        self.atten_matmul2_us = self.atten_matmul2.time * 1e6
+        self.atten_fc_us = self.atten_fc.time * 1e6
         self.atten_communication2_us = self.atten_communication2 * 1e6
-        self.fc1_us = self.fc1 * 1e6
-        self.fc2_us = self.fc2 * 1e6
+        self.fc1_us = self.fc1.time * 1e6
+        self.fc2_us = self.fc2.time * 1e6
         self.fc_communication_us = self.fc_communication * 1e6
         self.pipeline_stage_us = self.pipeline_stage * 1e6
         self.total_us = self.total * 1e6

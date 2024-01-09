@@ -20,6 +20,8 @@ class Package(Base):
 
     constants: PackageConstants = PackageConstantsCommon
 
+    num_hbm_stacks: int = 0
+
     heatsource_length: Optional[float] = None # mm
     heatsource_width: Optional[float] = None # mm
 
@@ -41,9 +43,13 @@ class Package(Base):
     invalid_reason: Optional[str] = None
 
     def update(self) -> None:
-        if self.hbm:
+        if self.chip.hbm_channels > 0:
             # HBM requires silicon interposer
             self.si = True
+            if self.hbm:
+                self.num_hbm_stacks = self.num_chips * (self.chip.hbm_channels // self.hbm.num_channels)
+            else:
+                raise ValueError('HBM is required but not provided')
         elif self.num_chips == 1:
             # 1 chip per package doesn't need silicon interposer
             self.si = False
@@ -51,32 +57,22 @@ class Package(Base):
         self.io.num = self.num_chips * self.chip.pkg2pkg_io.num
         self.io.update()
         self.perf = self.num_chips * self.chip.perf
-        self.tdp = self.num_chips * self.chip.tdp
+        self.tdp = self.num_chips * self.chip.tdp + self.num_hbm_stacks * self.hbm.tdp
         self.sram = self.num_chips * self.chip.sram
-        self.dram = 0.0
+        self.dram = self.num_hbm_stacks * self.hbm.cap
+        self.total_mem = self.sram + self.dram
 
         self._update_dimension()
         if self.check_area():
             self.valid = True
             if self.mem_3d:
                 raise NotImplementedError('3D memory is not supported yet')
-                # self.tdp += (self.num_chips * self.mem_3d.tdp)
-                # if self.mem_3d.mem_type == '3d_dram':
-                #     self.dram += (self.num_chips * self.mem_3d.size)
-                # elif self.mem_3d.mem_type == '3d_sram':
-                #     self.sram += (self.num_chips * self.mem_3d.size)
-            if self.hbm:
-                self.tdp += self.hbm.total_tdp
-                self.dram += self.hbm.total_bytes
-            self.total_mem = self.sram + self.dram
             self.cost = self._get_cost()
         else:
             self.valid = False
     
     def _update_dimension(self) -> None:
-        self.total_die_area = self.num_chips * self.chip.area
-        if self.hbm:
-            self.total_die_area += self.hbm.total_area
+        self.total_die_area = self.num_chips * self.chip.area + self.num_hbm_stacks * self.hbm.area
         if self.si: 
             # silicon interposer
             self.area = self.total_die_area * self.constants.si_area_scale_factor
@@ -89,27 +85,28 @@ class Package(Base):
     def check_area(self) -> bool:
         if self.mem_3d:
             raise NotImplementedError('3D memory is not supported yet')
-        if self.hbm:
+        if self.num_hbm_stacks > 0:
             # check the physical layout of HBM to see if there is enough space to place it
             # now we only allow HBM to be placed on the long side of the chip
             # and the long side of HBM is parallel to the side of the chip
             # this is the same as GPU and TPU
             chip_long_side = max(self.chip.x, self.chip.y)
-            hbm_long_side = max(self.hbm.stack_x, self.hbm.stack_y)
-            max_num_stacks = 2 * math.ceil(chip_long_side / hbm_long_side)
-            if self.hbm.num_stacks > max_num_stacks:
-                self.invalid_reason = f'Not enough space to place {self.hbm.num_stacks} HBM stacks'
+            hbm_long_side = max(self.hbm.x, self.hbm.y)
+            max_num_stacks_per_chip = 2 * math.ceil(chip_long_side / hbm_long_side)
+            max_num_stacks = max_num_stacks_per_chip * self.num_chips
+            if self.num_hbm_stacks > max_num_stacks:
+                self.invalid_reason = f'Not enough space to place {self.num_hbm_stacks} HBM stacks'
                 return False
-            elif self.hbm.num_stacks > max_num_stacks / 2:
+            elif self.num_hbm_stacks > max_num_stacks / 2:
                 # If place on both sides
-                num_stacks_per_side = math.ceil(self.hbm.num_stacks / 2)
+                num_stacks_per_side = math.ceil(self.num_hbm_stacks / 2)
                 chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
-                chip_hbm_short_side = min(self.chip.x, self.chip.y) + 2 * min(self.hbm.stack_x, self.hbm.stack_y)
+                chip_hbm_short_side = min(self.chip.x, self.chip.y) + 2 * min(self.hbm.x, self.hbm.y)
             else:
                 # If place on one side only
-                num_stacks_per_side = self.hbm.num_stacks
+                num_stacks_per_side = self.num_hbm_stacks
                 chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
-                chip_hbm_short_side = min(self.chip.x, self.chip.y) + min(self.hbm.stack_x, self.hbm.stack_y)
+                chip_hbm_short_side = min(self.chip.x, self.chip.y) + min(self.hbm.x, self.hbm.y)
             self.heatsource_length = max(chip_hbm_long_side, chip_hbm_short_side)
         else:
             if self.total_die_area > self.constants.max_die_area:
@@ -121,11 +118,9 @@ class Package(Base):
         return True
         
     def _get_cost(self) -> float:
-        total_cost = self.num_chips * self.chip.cost
+        total_cost = self.num_chips * self.chip.cost + self.num_hbm_stacks * self.hbm.cost
         if self.mem_3d:
             raise NotImplementedError('3D memory is not supported yet')
-        if self.hbm:
-            total_cost += self.hbm.total_cost
         total_cost += self._eval_package_cost()
         return total_cost
     

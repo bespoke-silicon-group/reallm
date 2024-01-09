@@ -23,6 +23,8 @@ class Chip(Base):
    mac_ratio: Optional[float] = None # (0, 1.0), mac_area / (sram_area + mac_area)
    operational_intensity: Optional[float] = None # ops per sram read
 
+   hbm_channels: int = 0 # number of HBM channels, each channel is 128 bit
+
    tech: str = '7nm'
    # MACs density mm2/Tera BF16 ops
    macs_density: float = 2.65 # data from whole chip implementations
@@ -34,12 +36,16 @@ class Chip(Base):
    padring_width: float = 0.35
    core_area_ratio: float = 0.7
    other_area: float = 0.0 # chip area except SRAM and compute units
+   acc_depth: int = int(1e100) # accumulation depth for systolic array, now assume it's infinite
    freq: float = 1e9 # Hz
    bytes_per_word: int = 2 # bfloat or fp16
    constants: ChipConstants = ChipConstants7nm
 
    valid: Optional[bool] = None
    invalid_reason: Optional[str] = None
+
+   num_sa: Optional[int] = 1 # number of systolic arrays, now assume it's 1
+   sa_width: Optional[int] = None # systolic array width, height is the same as width
 
    tdp: Optional[float] = None # Watts
    cost: Optional[float] = None # $
@@ -66,6 +72,9 @@ class Chip(Base):
          self.io_area = self.pkg2pkg_io.area + self.chip2chip_io.area
       else:
          self.io_area = self.pkg2pkg_io.area
+      
+      # HBM PHY and controller area
+      self.other_area += self.hbm_channels * self.constants.hbm_phy_ctrl_area_per_channel
 
       if self.perf and self.sram:
          self.update_using_perf_sram()
@@ -74,6 +83,9 @@ class Chip(Base):
       else:
          self.valid = False
          self.invalid_reason = 'Wrong chip input configuration'
+      
+      total_fma = math.floor(self.perf / self.freq / 2) # 2 flops per MAC
+      self.sa_width = math.floor(math.sqrt(total_fma / self.num_sa))
       
       if self.sram:
          if self.check_area():

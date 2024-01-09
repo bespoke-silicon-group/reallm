@@ -10,7 +10,6 @@ from .Mapping import Mapping
 @dataclass
 class System(Base):
     server: Server
-    server_id: int
     model: Model
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
@@ -90,9 +89,9 @@ class System(Base):
 
         if self.server.package.mem_3d:
             raise NotImplementedError('3D memory or side memory is not supported yet.')
-        if self.server.package.hbm:
-            self.weight_bw_per_chip = self.server.package.hbm.total_bandwidth / self.server.package.num_chips
-            self.kv_bw_per_chip = self.server.package.hbm.total_bandwidth / self.server.package.num_chips
+        if self.server.package.num_hbm_stacks > 0:
+            self.weight_bw_per_chip = self.server.package.num_hbm_stacks * self.server.package.hbm.bandwidth / self.server.package.num_chips
+            self.kv_bw_per_chip = self.weight_bw_per_chip
         else:
             self.weight_bw_per_chip = self.server.package.chip.sram_bw
             self.kv_bw_per_chip = self.server.package.chip.sram_bw
@@ -117,7 +116,7 @@ class System(Base):
             batch_prefill_opt_lat = float('inf')
             batch_prefill_opt_tco = float('inf')
             mappings = self.gen_mappings(batch=batch, min_ctx_len=self.prefill_eval_ctx_len+1)
-            for mapping in mappings:
+            for mapping in mappings[-1:]:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.prefill_eval_ctx_len, generate_len=1, update_on_init=False)
                 perf.prefill_eval()
                 if perf.prefill_latency < batch_prefill_opt_lat:
@@ -129,7 +128,8 @@ class System(Base):
             # generate optimization
             batch_generate_opt_lat = float('inf')
             batch_generate_opt_tco = float('inf')
-            for mapping in self.gen_mappings(batch=batch, min_ctx_len=self.generate_eval_prefill_len+self.generate_eval_generate_len):
+            mappings = self.gen_mappings(batch=batch, min_ctx_len=self.generate_eval_prefill_len+self.generate_eval_generate_len)
+            for mapping in mappings[-1:]:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.generate_eval_prefill_len, generate_len=self.generate_eval_generate_len, update_on_init=False)
                 perf.generate_eval()
                 if perf.generate_latency < batch_generate_opt_lat:

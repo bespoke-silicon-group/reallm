@@ -12,6 +12,8 @@ class ChipConstants():
     # Power Model, W/Tera BF16 ops
     # w_per_tops: float = 1.3
 
+    hbm_phy_ctrl_area_per_channel: float = 1.04 # mm2
+
     max_die_area: int = 900
     D0: float = 0.001 # defects/mm2 = defects/cm2/100
     alpha: float = 10.0 # critical level

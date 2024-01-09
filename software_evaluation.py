@@ -6,8 +6,8 @@ from structs.System import System
 from structs.Server import Server
 from structs.Performance import Performance
 
-def system_eval(server: Server, srv_id: int, model: Model, num_servers: Optional[int], max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[System]:
-    system = System(server=server, server_id=srv_id, model=model, num_servers=num_servers, max_ctx_len_batch_1=max_ctx_len_batch_1, max_batch=max_batch, asplos_version=asplos_version)
+def system_eval(server: Server, model: Model, num_servers: Optional[int], max_ctx_len_batch_1: int, max_batch: int, asplos_version: bool = False) -> Optional[System]:
+    system = System(server=server, model=model, num_servers=num_servers, max_ctx_len_batch_1=max_ctx_len_batch_1, max_batch=max_batch, asplos_version=asplos_version)
     if system.valid:
         return system
     else:
@@ -34,7 +34,6 @@ if __name__ == '__main__':
     system_eval_args = []
     with open(args.hardware, 'rb') as f:
         servers = pickle.load(f)
-        srv_id = 0
         for server in servers:
             # set number of servers
             # num_servers = 1
@@ -43,14 +42,19 @@ if __name__ == '__main__':
             #     num_servers *= 2
 
             # set max context length
+            args.max_batch = 2
             for max_ctx_len_batch_1 in [128*1024]:
-                system_eval_args.append((server, srv_id, model, None, max_ctx_len_batch_1, args.max_batch))
-            srv_id += 1
+                system_eval_args.append((server, model, None, max_ctx_len_batch_1, args.max_batch))
 
     start_time = time.time()
-    num_cores = multiprocessing.cpu_count()
-    with multiprocessing.Pool(processes=num_cores) as pool:
-        all_systems = pool.starmap(system_eval, system_eval_args)
+    # num_cores = multiprocessing.cpu_count()
+    # with multiprocessing.Pool(processes=num_cores) as pool:
+    #     all_systems = pool.starmap(system_eval, system_eval_args)
+    all_systems = []
+    for system_eval_arg in system_eval_args:
+        system = system_eval(*system_eval_arg)
+        if system is not None:
+            all_systems.append(system)
     elapsed_time = time.time() - start_time
     with open(args.results_dir+'/'+model.name+'.pkl', 'wb') as f:
       pickle.dump(all_systems, f)
