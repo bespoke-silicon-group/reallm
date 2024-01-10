@@ -90,11 +90,10 @@ class System(Base):
         if self.server.package.mem_3d:
             raise NotImplementedError('3D memory or side memory is not supported yet.')
         if self.server.package.num_hbm_stacks > 0:
-            self.weight_bw_per_chip = self.server.package.num_hbm_stacks * self.server.package.hbm.bandwidth / self.server.package.num_chips
-            self.kv_bw_per_chip = self.weight_bw_per_chip
+            self.weight_bw_per_chip = self.server.package.dram_bw_per_chip
         else:
             self.weight_bw_per_chip = self.server.package.chip.sram_bw
-            self.kv_bw_per_chip = self.server.package.chip.sram_bw
+        self.kv_bw_per_chip = self.weight_bw_per_chip
         
         self.perf = self.num_servers * self.server.perf
         self.tdp = self.num_servers * self.server.tdp

@@ -268,8 +268,6 @@ class Performance(Base):
         d = self.system.model.d
         t = self.mapping.t
         data_bytes = self.system.model.bytes_per_number
-        hbm_stacks_per_chip = int(self.system.server.package.num_hbm_stacks / self.system.server.package.num_chips)
-        dram_config = self.system.server.package.hbm.config_dir + f'/{hbm_stacks_per_chip}_stack.ini'
 
         if stage == 'prefill':
             # micro batch size for prefill is always 1
@@ -333,7 +331,7 @@ class Performance(Base):
         # so for each chip, we have (activation_row, d) * (d, 3d/t)
         A = (activation_row, d)
         B = (d, math.ceil(3 * d / t))
-        atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
+        atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # attention matmul: Q * K_T, (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
         # in ASPLOS submission
@@ -343,7 +341,7 @@ class Performance(Base):
         else:
             A = (micro_batch, 1, math.ceil(d / t))
             B = (micro_batch, math.ceil(d / t), atten_activation_row)
-        atten_matmul1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip, dram_config)
+        atten_matmul1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         if t > self.system.model.num_heads:
             # DOUBLE CHECK HERE
             chips_per_head = int(t / self.system.model.num_heads)
@@ -354,7 +352,7 @@ class Performance(Base):
         # attention matmul: S * V, (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
         A = (micro_batch, 1, atten_activation_row)
         B = (micro_batch, atten_activation_row, math.ceil(d / t))
-        atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip, dram_config)
+        atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
         # it is able to compute part of the atten_out O
         ##################################################################
@@ -364,7 +362,7 @@ class Performance(Base):
         # so for each chip, we have (activation_row, d/t) * (d/t, d)
         A = (activation_row, math.ceil(d / t))
         B = (math.ceil(d / t), d)
-        atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
+        atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
         atten_all_to_all_latency = self._get_ring_all_reduce_latency(t, d * data_bytes, collective_links) / 2 # half of the latency of all-reduce
@@ -385,7 +383,7 @@ class Performance(Base):
         # so for each chip we have (activation_row, d) * (d, 4d/t)
         A = (activation_row, d)
         B = (d, math.ceil(4 * d / t))
-        fc1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
+        fc1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # FC 2
         # each chip get the activation of size (activation_row, 4d/t)
@@ -393,7 +391,7 @@ class Performance(Base):
         # each for chip we have (activation_row, 4d/t) * (4d/t, d)
         A = (activation_row, math.ceil(4 * d / t))
         B = (math.ceil(4 * d / t), d)
-        fc2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip, dram_config)
+        fc2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce
         # We adopt the same partitioning scheme as EFFICIENTLY SCALING TRANSFORMER INFERENCE
@@ -467,10 +465,8 @@ class MatmulLatency(Base):
     B: TensorShape
     chip: Chip
     weight_bw: int
-    dram_config: str
     data_bytes: int = 2
     data_flow: str = 'WS' # weight stationary
-    bw_dict_path: str = 'mem_sim/bw_dict.json'
 
     # derived metrics
     I: Optional[int] = None
@@ -530,8 +526,6 @@ class MatmulLatency(Base):
             self.B_shape = (stacks_per_core, self.J_hat, self.K_hat, self.J_bar, self.K_bar)
             self.O_shape = (stacks_per_core, self.I_hat, self.K_hat, self.I_bar, self.K_bar)
 
-            dramsim_bw = self._get_bw()
-            print(f'channels = {self.chip.hbm_channels}, dramsim3_bw = {dramsim_bw} GB/s, peak_bw = {self.weight_bw / 1024/1024/1024} GB/s, ratio = {dramsim_bw / (self.weight_bw / 1024/1024/1024)}')
             self.block_ldst_time = (self.J_bar * self.K_bar) / self.weight_bw
             self.block_comp_time = math.ceil(max(2 * self.chip.sa_width + self.I_bar, 2 * self.I_bar) / 2) / self.chip.freq
             max_block_time = max(self.block_ldst_time, self.block_comp_time)
@@ -542,14 +536,6 @@ class MatmulLatency(Base):
             self.unitilization = self.num_ops / (self.time * self.chip.perf)
         else:
             raise NotImplementedError
-    
-    def _get_bw(self) -> float:
-        with open(self.bw_dict_path) as json_file:
-            bw_dict = json.load(json_file)
-        sa_width = self.chip.sa_width
-        config = self.dram_config
-        bw = bw_dict[config][str(sa_width)]
-        return bw
 
     # def _call_dramsim3(self) -> float:
     #     num_bytes = self.J_bar * self.K_bar * self.data_bytes

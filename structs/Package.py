@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 from typing import Optional
 import math
+import json
 
 from .Base import Base
 from .IO import IO
@@ -38,6 +39,7 @@ class Package(Base):
     sram: Optional[float] = None # Byte
     dram: Optional[float] = None # Byte
     total_mem: Optional[int] = None # sram and dram, Byte
+    dram_bw_per_chip: Optional[float] = None # Byte/sec
 
     valid: Optional[bool] = None
     invalid_reason: Optional[str] = None
@@ -61,6 +63,15 @@ class Package(Base):
         self.sram = self.num_chips * self.chip.sram
         self.dram = self.num_hbm_stacks * self.hbm.cap
         self.total_mem = self.sram + self.dram
+        if self.hbm:
+            if self.hbm.simulator:
+                total_dram_bw = self._get_bw_from_simulator()
+            else:
+                total_dram_bw = self.hbm.bandwidth * self.num_hbm_stacks * self.hbm.bandwidth_efficiency
+            self.dram_bw_per_chip = total_dram_bw / self.num_chips
+        else:
+            self.dram_bw_per_chip = 0
+        # print(f'Package {self.package_id}: {self.num_chips} chips, {self.num_hbm_stacks} HBM stacks, {self.perf/1e12} TFLOPS, {self.sram/1e6} MB SRAM, {self.dram/1024/1024/1024} GB DRAM, {self.dram_bw_per_chip/1024/1024/1024} GB/s DRAM BW per chip')
 
         self._update_dimension()
         if self.check_area():
@@ -159,6 +170,18 @@ class Package(Base):
             cost_wasted_chips = self.num_chips * self.chip.cost * (1 / bonding_yield - 1)
 
         return cost_pkg + cost_wasted_chips
+    
+    def _get_bw_from_simulator(self) -> int:
+        '''
+        Get the bandwidth from a json file generate by DRAMSim3 simulator.
+        Return the bandwidth in byte/sec.
+        '''
+        with open(self.hbm.bw_dict_path) as json_file:
+            bw_dict = json.load(json_file)
+        config = f'configs/{self.hbm.config}/{self.num_hbm_stacks}_stack.ini'
+        bw_GBps = bw_dict[config][str(self.chip.sa_width)]
+        bw = int(bw_GBps * 1024 * 1024 * 1024)
+        return bw
 
 
 
