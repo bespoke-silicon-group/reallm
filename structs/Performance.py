@@ -629,7 +629,7 @@ class MicroBatchLatency(Base):
         self.pipeline_stage_us = self.pipeline_stage * 1e6
         self.total_us = self.total * 1e6
         self.compute_us = self.compute * 1e6
-        self. communication_us = self.communication * 1e6
+        self.communication_us = self.communication * 1e6
 
 @dataclass
 class Energy(Base):

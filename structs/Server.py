@@ -108,9 +108,10 @@ class Server(Base):
     def _get_cost(self) -> float:
         c_dcdc = self.constants.APPPower / 1.0
         c_dcdc += (self.package.chip.core_tdp / self.package.chip.vdd) * self.num_chips
-        c_dcdc += (self.package.num_hbm_stacks * self.package.hbm.tdp / self.package.hbm.vdd) * self.num_packages
         if self.package.mem_3d:
-            raise NotImplementedError('3D memory is not supported yet')
+            c_dcdc += (self.package.chip.mem_3d_vaults * self.package.mem_3d.tdp / self.package.mem_3d.vdd) * self.num_chips * self.num_packages
+        elif self.package.hbm:
+            c_dcdc += (self.package.num_hbm_stacks * self.package.hbm.tdp / self.package.hbm.vdd) * self.num_packages
         cost_dcdc = self.constants.DCDCCostPerAmp * c_dcdc
         cost_psu = self.tdp * self.constants.PSUCostPerW
 

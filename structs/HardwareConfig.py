@@ -4,7 +4,7 @@ from structs.Chip import Chip
 from structs.Package import Package
 from structs.Server import Server
 from structs.IO import IO
-from structs.Memory import HBM
+from structs.Memory import HBM, Memory_3D_Vault
 from typing import Optional, List, Dict
 from dataclasses import dataclass
 
@@ -81,7 +81,7 @@ class PackageConfig(Base):
         if pkg_id not in config:
           config['package_id'] = pkg_id
         if 'mem_3d' in config:
-          raise NotImplementedError('3D memory not supported yet.')
+          config['mem_3d'] = Memory_3D_Vault(**config['mem_3d'])
         if 'hbm' in config:
           config['hbm'] = HBM(**config['hbm'])
         pkg = Package(**config)

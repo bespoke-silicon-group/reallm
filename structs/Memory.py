@@ -33,13 +33,33 @@ class HBM(Memory):
     vdd: float = 1.2 # in volt
     x: float = 7.75 # in mm
     y: float = 11.87 # in mm
+    stack_cost: Optional[float] = None # in $
 
     config: str = 'HBM2_4GB'
     bw_dict_path: str = 'mem_sim/bw_dict.json'
 
     def update(self) -> None:
+        self.mem_type = 'hbm'
         self.cap = self.channel_bytes * self.num_channels
         self.bandwidth = self.bit_rate * self.channel_width * self.num_channels / 8
         self.tdp = self.bandwidth * self.pj_per_byte * 1e-12
         self.area = self.x * self.y
-        self.cost = self.cap / 1024 / 1024 / 1024 * self.cost_per_gb
+        if self.stack_cost:
+            self.cost = self.stack_cost
+        else:
+            self.cost = self.cap / 1024 / 1024 / 1024 * self.cost_per_gb
+
+@dataclass
+class Memory_3D_Vault(Memory):
+    layer_bytes: Optional[int] = None
+    layer_area: Optional[float] = None
+    layer_cost: Optional[float] = None
+    num_layers: Optional[int] = None
+
+    vdd: float = 1.2 # in volt
+
+    def update(self) -> None:
+        self.cap = self.layer_bytes * self.num_layers
+        self.tdp = self.bandwidth * self.pj_per_byte * 1e-12
+        self.area = self.layer_area
+        self.cost= self.layer_cost * self.num_layers

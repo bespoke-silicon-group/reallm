@@ -6,7 +6,7 @@ import json
 from .Base import Base
 from .IO import IO
 from .Chip import Chip, dies_per_wafer, get_die_yield
-from .Memory import Memory, HBM
+from .Memory import Memory, HBM, Memory_3D_Vault
 from .Constants import PackageConstants, PackageConstantsCommon
 
 @dataclass
@@ -14,7 +14,7 @@ class Package(Base):
     package_id: int
     chip: Chip
     num_chips: int = 1 # number of chips per package
-    mem_3d: Optional[Memory] = None # memory stacked on the top of the chip, can be SRAM or DRAM
+    mem_3d: Optional[Memory_3D_Vault] = None # memory stacked on the top of the chip, can be SRAM or DRAM
     hbm: Optional[HBM] = None # memory on the side of the chip, usually is HBM
     io: Optional[IO] = None # package to package links
     si: bool = None # whether to use silicon interposer
@@ -55,35 +55,48 @@ class Package(Base):
         elif self.num_chips == 1:
             # 1 chip per package doesn't need silicon interposer
             self.si = False
+
+        if self.chip.mem_3d_vaults > 0:
+            if not self.mem_3d:
+                raise ValueError('Memory 3D vault is required but not provided')
+
         self.io = replace(self.chip.pkg2pkg_io)
         self.io.num = self.num_chips * self.chip.pkg2pkg_io.num
         self.io.update()
         self.perf = self.num_chips * self.chip.perf
-        self.tdp = self.num_chips * self.chip.tdp + self.num_hbm_stacks * self.hbm.tdp
-        self.sram = self.num_chips * self.chip.sram
-        self.dram = self.num_hbm_stacks * self.hbm.cap
-        self.total_mem = self.sram + self.dram
-        if self.hbm:
+        self.tdp = self.num_chips * self.chip.tdp
+        if self.chip.mem_3d_vaults > 0:
+            # assume the 3D memory is DRAM
+            self.tdp += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp
+            print(f'Package {self.package_id}: core tdps {self.num_chips * self.chip.tdp}, 3D memory tdps {self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp}')
+            self.dram = self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
+            self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults
+        elif self.num_hbm_stacks > 0:
+            self.tdp += self.num_hbm_stacks * self.hbm.tdp
+            self.dram = self.num_hbm_stacks * self.hbm.cap
             if self.hbm.simulator:
                 total_dram_bw = self._get_bw_from_simulator()
             else:
                 total_dram_bw = self.hbm.bandwidth * self.num_hbm_stacks * self.hbm.bandwidth_efficiency
             self.dram_bw_per_chip = total_dram_bw / self.num_chips
         else:
+            self.dram = 0
             self.dram_bw_per_chip = 0
+        self.sram = self.num_chips * self.chip.sram
+        self.total_mem = self.sram + self.dram
         # print(f'Package {self.package_id}: {self.num_chips} chips, {self.num_hbm_stacks} HBM stacks, {self.perf/1e12} TFLOPS, {self.sram/1e6} MB SRAM, {self.dram/1024/1024/1024} GB DRAM, {self.dram_bw_per_chip/1024/1024/1024} GB/s DRAM BW per chip')
 
         self._update_dimension()
         if self.check_area():
             self.valid = True
-            if self.mem_3d:
-                raise NotImplementedError('3D memory is not supported yet')
             self.cost = self._get_cost()
         else:
             self.valid = False
     
     def _update_dimension(self) -> None:
-        self.total_die_area = self.num_chips * self.chip.area + self.num_hbm_stacks * self.hbm.area
+        self.total_die_area = self.num_chips * self.chip.area
+        if self.hbm:
+            self.total_die_area += self.num_hbm_stacks * self.hbm.area
         if self.si: 
             # silicon interposer
             self.area = self.total_die_area * self.constants.si_area_scale_factor
@@ -94,8 +107,10 @@ class Package(Base):
         self.width = self.length
 
     def check_area(self) -> bool:
-        if self.mem_3d:
-            raise NotImplementedError('3D memory is not supported yet')
+        if self.chip.mem_3d_vaults > 0:
+            if self.chip.mem_3d_vaults * self.mem_3d.area > self.chip.area:
+                self.invalid_reason = f'Not enough space to place {self.chip.mem_3d_vaults} 3D memory vaults'
+                return False
         if self.num_hbm_stacks > 0:
             # check the physical layout of HBM to see if there is enough space to place it
             # now we only allow HBM to be placed on the long side of the chip
@@ -129,9 +144,11 @@ class Package(Base):
         return True
         
     def _get_cost(self) -> float:
-        total_cost = self.num_chips * self.chip.cost + self.num_hbm_stacks * self.hbm.cost
+        total_cost = self.num_chips * self.chip.cost
+        if self.hbm:
+            total_cost += self.num_hbm_stacks * self.hbm.cost
         if self.mem_3d:
-            raise NotImplementedError('3D memory is not supported yet')
+            total_cost += (self.num_chips * self.mem_3d.cost * self.chip.mem_3d_vaults)
         total_cost += self._eval_package_cost()
         return total_cost
     

@@ -24,6 +24,7 @@ class Chip(Base):
    operational_intensity: Optional[float] = None # ops per sram read
 
    hbm_channels: int = 0 # number of HBM channels, each channel is 128 bit
+   mem_3d_vaults: int = 0 # number of 3D memory vaults
 
    tech: str = '7nm'
    # MACs density mm2/Tera BF16 ops
@@ -75,6 +76,8 @@ class Chip(Base):
       
       # HBM PHY and controller area
       self.other_area += self.hbm_channels * self.constants.hbm_phy_ctrl_area_per_channel
+      # 3D memory TSV and controller area
+      self.other_area += self.mem_3d_vaults * self.constants.mem_3d_tsv_ctrl_area_per_vault
 
       if self.perf and self.sram:
          self.update_using_perf_sram()
