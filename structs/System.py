@@ -19,9 +19,9 @@ class System(Base):
     max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    prefill_eval_ctx_len: int = 128
+    prefill_eval_ctx_len: int = 256
     generate_eval_prefill_len: int = 128
-    generate_eval_generate_len: int = 256
+    generate_eval_generate_len: int = 129
     energy_model: bool = True # whether to use the energy model for calculating the TCO
 
     asplos_version: bool = False
@@ -89,7 +89,16 @@ class System(Base):
 
         # now we only support either 3D memory, or HBM, or SRAM
         if self.server.package.chip.mem_3d_vaults > 0:
-            self.weight_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
+            if 'SRAM' or 'sram' in self.server.package.mem_3d.mem_type:
+                sram_3d_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
+                sram_3d_cap_per_chip = self.server.package.mem_3d.cap * self.server.package.chip.mem_3d_vaults
+                total_sram_per_chip = self.server.package.chip.sram + sram_3d_cap_per_chip
+                self.weight_bw_per_chip = sram_3d_bw_per_chip * sram_3d_cap_per_chip / total_sram_per_chip + \
+                                          self.server.package.chip.sram_bw * self.server.package.chip.sram / total_sram_per_chip
+            elif 'DRAM' or 'dram' in self.server.package.mem_3d.mem_type:
+                self.weight_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
+            else:
+                raise ValueError('Unsupported 3D memory type.')
         elif self.server.package.num_hbm_stacks > 0:
             self.weight_bw_per_chip = self.server.package.dram_bw_per_chip
         else:
@@ -116,7 +125,7 @@ class System(Base):
             batch_opt_prefill_lat = float('inf')
             batch_opt_prefill_tco = float('inf')
             mappings = self.gen_mappings(batch=batch, min_ctx_len=self.prefill_eval_ctx_len+1)
-            for mapping in mappings[-1:]:
+            for mapping in mappings:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.prefill_eval_ctx_len, generate_len=1, update_on_init=False)
                 perf.prefill_eval()
                 if perf.prefill_latency < batch_opt_prefill_lat:
@@ -129,7 +138,7 @@ class System(Base):
             batch_opt_generate_lat = float('inf')
             batch_opt_generate_tco = float('inf')
             mappings = self.gen_mappings(batch=batch, min_ctx_len=self.generate_eval_prefill_len+self.generate_eval_generate_len)
-            for mapping in mappings[-1:]:
+            for mapping in mappings:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.generate_eval_prefill_len, generate_len=self.generate_eval_generate_len, update_on_init=False)
                 perf.generate_eval()
                 if perf.generate_latency < batch_opt_generate_lat:

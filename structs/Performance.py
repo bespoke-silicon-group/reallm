@@ -275,7 +275,8 @@ class Performance(Base):
             micro_batch = 1
             atten_activation_row = activation_row
         else:
-            micro_batch = activation_row = self.mapping.micro_batch
+            micro_batch = self.mapping.micro_batch
+            activation_row = micro_batch
             atten_activation_row = activation_row * (self.prefill_len + self.generate_len / 2)
             if self.asplos_version:
                 atten_activation_row = activation_row * 20
@@ -466,7 +467,8 @@ class MatmulLatency(Base):
     chip: Chip
     weight_bw: int
     data_bytes: int = 2
-    data_flow: str = 'WS' # weight stationary
+    # data_flow: str = 'WS' # weight stationary
+    data_flow: str = 'simple'
 
     # derived metrics
     I: Optional[int] = None
@@ -494,18 +496,17 @@ class MatmulLatency(Base):
     time: Optional[float] = None
 
     def update(self) -> None:
+        assert len(self.A) == len(self.B)
+        assert len(self.A) >= 2
+        assert self.A[-1] == self.B[-2]
+        self.I = self.A[-2]
+        self.J = self.A[-1]
+        self.K = self.B[-1]
+        if len(self.A) > 2:
+            stacks = math.prod(self.A[:-2])
+        else:
+            stacks = 1
         if self.data_flow == 'WS':
-            assert len(self.A) == len(self.B)
-            assert len(self.A) >= 2
-            assert self.A[-1] == self.B[-2]
-            self.I = self.A[-2]
-            self.J = self.A[-1]
-            self.K = self.B[-1]
-            if len(self.A) > 2:
-                stacks = math.prod(self.A[:-2])
-            else:
-                stacks = 1
-            
             if stacks > self.chip.num_sa:
                 stacks_per_core = math.ceil(stacks / self.chip.num_sa)
                 self.K_per_core = self.K
@@ -533,7 +534,13 @@ class MatmulLatency(Base):
             self.time = stacks_per_core * (self.block_ldst_time + self.block_comp_time + (self.I_hat * self.J_hat * self.K_hat - 1) * max_block_time)
             
             self.num_ops = stacks * self.I * self.J * self.K * 2
-            self.unitilization = self.num_ops / (self.time * self.chip.perf)
+            self.utilization = self.num_ops / (self.time * self.chip.perf)
+        elif self.data_flow == 'simple':
+            self.num_ops = stacks * self.I * self.J * self.K * 2
+            self.block_comp_time = self.num_ops / self.chip.perf
+            self.block_ldst_time = (self.J * self.K) / self.weight_bw
+            self.time = max(self.block_comp_time, self.block_ldst_time)
+            self.utilization = self.num_ops / (self.time * self.chip.perf)
         else:
             raise NotImplementedError
 

@@ -65,12 +65,19 @@ class Package(Base):
         self.io.update()
         self.perf = self.num_chips * self.chip.perf
         self.tdp = self.num_chips * self.chip.tdp
+        self.sram = self.num_chips * self.chip.sram
         if self.chip.mem_3d_vaults > 0:
-            # assume the 3D memory is DRAM
             self.tdp += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp
             print(f'Package {self.package_id}: core tdps {self.num_chips * self.chip.tdp}, 3D memory tdps {self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp}')
-            self.dram = self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
-            self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults
+            if 'SRAM' or 'sram' in self.mem_3d.mem_type:
+                self.sram += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
+                self.dram = 0
+                self.dram_bw_per_chip = 0
+            elif 'DRAM' or 'dram' in self.mem_3d.mem_type:
+                self.dram = self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
+                self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults
+            else:
+                raise ValueError('Memory 3D vault type is not supported')
         elif self.num_hbm_stacks > 0:
             self.tdp += self.num_hbm_stacks * self.hbm.tdp
             self.dram = self.num_hbm_stacks * self.hbm.cap
@@ -82,7 +89,6 @@ class Package(Base):
         else:
             self.dram = 0
             self.dram_bw_per_chip = 0
-        self.sram = self.num_chips * self.chip.sram
         self.total_mem = self.sram + self.dram
         # print(f'Package {self.package_id}: {self.num_chips} chips, {self.num_hbm_stacks} HBM stacks, {self.perf/1e12} TFLOPS, {self.sram/1e6} MB SRAM, {self.dram/1024/1024/1024} GB DRAM, {self.dram_bw_per_chip/1024/1024/1024} GB/s DRAM BW per chip')
 
