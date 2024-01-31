@@ -68,7 +68,6 @@ class Package(Base):
         self.sram = self.num_chips * self.chip.sram
         if self.chip.mem_3d_vaults > 0:
             self.tdp += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp
-            print(f'Package {self.package_id}: core tdps {self.num_chips * self.chip.tdp}, 3D memory tdps {self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp}')
             if 'SRAM' or 'sram' in self.mem_3d.mem_type:
                 self.sram += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
                 self.dram = 0

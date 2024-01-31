@@ -71,6 +71,18 @@ class Performance(Base):
         self.prefill_power = self.prefill_core_energy.total / self.prefill_latency + self.system.other_tdp
 
         self.prefill_srv_tco, self.prefill_tco_per_token = self._get_tco('prefill')
+        
+        if micro_batch_latency.communication > micro_batch_latency.compute:
+            self.prefill_bottleneck = 'Interconnect'
+        else:
+            mm = micro_batch_latency.atten_qkv
+            if mm.utilization < 0.98:
+                self.prefill_bottleneck = 'Bandwidth'
+            else:
+                if self.prefill_utilization > 0.5:
+                    self.prefill_bottleneck = 'Compute'
+                else:
+                    self.prefill_bottleneck = 'Unknown'
 
     def generate_eval(self) -> None:
         """
@@ -128,6 +140,18 @@ class Performance(Base):
         self.generate_power = self.generate_core_energy.total / self.generate_latency + self.system.other_tdp
 
         self.generate_srv_tco, self.generate_tco_per_token = self._get_tco('generate')
+
+        if micro_batch_latency.communication > micro_batch_latency.compute:
+            self.generate_bottleneck = 'Interconnect'
+        else:
+            mm = micro_batch_latency.atten_qkv
+            if mm.utilization < 0.98:
+                self.generate_bottleneck = 'Bandwidth'
+            else:
+                if self.generate_utilization > 0.5:
+                    self.generate_bottleneck = 'Compute'
+                else:
+                    self.generate_bottleneck = 'Unknown'
     
     def _get_tco(self, stage: str) -> Tuple[TCO, float]:
         '''
@@ -187,10 +211,13 @@ class Performance(Base):
         n_layers = self.system.model.num_layers
         bytes_per_word = self.system.model.bytes_per_number
 
-        if self.system.server.package.hbm:
+        if self.system.server.package.num_hbm_stacks > 0:
             # if there is HBM, we will use HBM for kv cache and weight
             weight_mem_energy = self.system.server.package.hbm.pj_per_byte
             kvcache_mem_energy = self.system.server.package.hbm.pj_per_byte
+        elif self.system.server.package.chip.mem_3d_vaults > 0:
+            weight_mem_energy = self.system.server.package.mem_3d.pj_per_byte
+            kvcache_mem_energy = self.system.server.package.mem_3d.pj_per_byte
         else:
             # otherwise, we will use SRAM for weight and DRAM for kv cache
             weight_mem_energy = EnergyConstants().sram_wgt

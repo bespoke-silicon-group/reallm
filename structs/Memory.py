@@ -58,6 +58,8 @@ class Memory_3D_Vault(Memory):
 
     vdd: float = 1.2 # in volt
 
+    config: Optional[str] = None
+
     def update(self) -> None:
         self.cap = self.layer_bytes * self.num_layers
         self.tdp = self.bandwidth * self.pj_per_byte * 1e-12

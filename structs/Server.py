@@ -16,6 +16,7 @@ class Server(Base):
     io: IO # server to server links
     num_lanes: int = 8 # number of lanes
     custom_max_power: Optional[float] = None # custom max server power
+    package_max_power_factor: float = 2.0 # package max power factor, assuming we can have better cooling
 
     num_packages: Optional[int] = None # number of packages per server
     num_chips: Optional[int] = None # number of chips per server
@@ -84,7 +85,7 @@ class Server(Base):
         if not self.hs.valid:
             self.invalid_reason = "Can't find valid heatsink configuration"
             return False
-        if self.hs.max_power < self.package.tdp:
+        if self.hs.max_power * self.package_max_power_factor < self.package.tdp:
             self.invalid_reason = f"Heatsink {self.hs.max_power} can't cool the package tdp {self.package.tdp}"
             return False
         if self.custom_max_power:
@@ -109,7 +110,7 @@ class Server(Base):
         c_dcdc = self.constants.APPPower / 1.0
         c_dcdc += (self.package.chip.core_tdp / self.package.chip.vdd) * self.num_chips
         if self.package.mem_3d:
-            c_dcdc += (self.package.chip.mem_3d_vaults * self.package.mem_3d.tdp / self.package.mem_3d.vdd) * self.num_chips * self.num_packages
+            c_dcdc += (self.package.chip.mem_3d_vaults * self.package.mem_3d.tdp / self.package.mem_3d.vdd) * self.num_chips
         elif self.package.hbm:
             c_dcdc += (self.package.num_hbm_stacks * self.package.hbm.tdp / self.package.hbm.vdd) * self.num_packages
         cost_dcdc = self.constants.DCDCCostPerAmp * c_dcdc
