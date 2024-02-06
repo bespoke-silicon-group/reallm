@@ -9,19 +9,19 @@ import math
 
 vlsi_12nm = VLSI(
     process=12,
-    fo4=math.inf,
-    V_wire=math.inf,
-    W_track=math.inf,
-    A_track=math.inf,
-    bf16_fma=math.inf,
-    fp32_adder=math.inf,
+    fo4=30.0,
+    V_wire=10.0,
+    W_track=0.1,
+    A_track=0.1,
+    bf16_fma=1000.0,
+    fp32_adder=1000.0,
 )
 
 vlsi_7nm = VLSI(
     process=7,
     fo4=math.inf,
     V_wire=math.inf,
-    W_track=math.inf,
+    W_track=0.1,
     A_track=math.inf,
     bf16_fma=math.inf,
     fp32_adder=math.inf,
@@ -32,19 +32,19 @@ vlsi_7nm = VLSI(
 # =============================================================================
 
 available_srams_12nm: List[SRAM] = [
-    SRAM(process=12, depth=1024, width=128, x=50.0, y=400.0),
-    SRAM(process=12, depth=1024, width=32,  x=50.0, y=400.0),
-    SRAM(process=12, depth=1024, width=64,  x=50.0, y=400.0),
-    SRAM(process=12, depth=2048, width=128, x=50.0, y=400.0),
-    SRAM(process=12, depth=2048, width=32,  x=50.0, y=400.0),
-    SRAM(process=12, depth=2048, width=64,  x=50.0, y=400.0),
-    SRAM(process=12, depth=4096, width=128, x=50.0, y=400.0),
-    SRAM(process=12, depth=4096, width=32,  x=50.0, y=400.0),
-    SRAM(process=12, depth=4096, width=64,  x=50.0, y=400.0),
-    SRAM(process=12, depth=512, width=128,  x=50.0, y=400.0),
-    SRAM(process=12, depth=512, width=32,   x=50.0, y=400.0),
-    SRAM(process=12, depth=512, width=64,   x=50.0, y=400.0),
-    SRAM(process=12, depth=8192, width=32,  x=50.0, y=400.0),
+    SRAM(process=12, depth=1024, width=128, x=100.0, y=200.0),
+    SRAM(process=12, depth=1024, width=32,  x=100.0, y=200.0),
+    SRAM(process=12, depth=1024, width=64,  x=100.0, y=200.0),
+    SRAM(process=12, depth=2048, width=128, x=100.0, y=200.0),
+    SRAM(process=12, depth=2048, width=32,  x=100.0, y=200.0),
+    SRAM(process=12, depth=2048, width=64,  x=100.0, y=200.0),
+    SRAM(process=12, depth=4096, width=128, x=100.0, y=200.0),
+    SRAM(process=12, depth=4096, width=32,  x=100.0, y=200.0),
+    SRAM(process=12, depth=4096, width=64,  x=100.0, y=200.0),
+    SRAM(process=12, depth=512, width=128,  x=100.0, y=200.0),
+    SRAM(process=12, depth=512, width=32,   x=100.0, y=200.0),
+    SRAM(process=12, depth=512, width=64,   x=100.0, y=200.0),
+    SRAM(process=12, depth=8192, width=32,  x=100.0, y=200.0),
 ]
 
 # =============================================================================
