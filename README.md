@@ -5,6 +5,8 @@ Chiplet Cloud is a chiplet-based ASIC supercomputer architecture that optimizes 
 To explore the software-hardware co-design space and perform software mapping-aware Chiplet Cloud optimizations across the architectural design space, we propose a comprehensive design methodology, which is this repository.
 This methodology not only accurately explores a spectrum of major design trade-offs in the joint space of hardware and software, but also generates a detailed performance-cost analysis on all valid design points and then outputs the Pareto frontier.
 
+The codebase has been tested in Python 3.10.
+
 
 ## Phases
 
