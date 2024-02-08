@@ -43,6 +43,8 @@ class PackageConstants():
     si_D0: float = 0.0007 # defects/mm2 = defects/cm2/100
     si_alpha: float = 6.0 # critical level
 
+    max_power_density: float = 1.0 # Watts/mm2
+
 @dataclass
 class ServerConstants():
     WaferCost = 12000.0

@@ -93,8 +93,11 @@ class Package(Base):
 
         self._update_dimension()
         if self.check_area():
-            self.valid = True
-            self.cost = self._get_cost()
+            if self.check_thermal():
+                self.valid = True
+                self.cost = self._get_cost()
+            else:
+                self.valid = False
         else:
             self.valid = False
     
@@ -147,6 +150,14 @@ class Package(Base):
         self.heatsource_width = self.heatsource_length
 
         return True
+    
+    def check_thermal(self) -> bool:
+        self.power_density = self.tdp / (self.heatsource_length * self.heatsource_width)
+        if self.power_density <= self.constants.max_power_density:
+            return True
+        else:
+            self.invalid_reason = f'Power density {self.power_density} W/mm2 is higher than the max power density {self.constants.max_power_density} W/mm2'
+            return False
         
     def _get_cost(self) -> float:
         total_cost = self.num_chips * self.chip.cost

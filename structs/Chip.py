@@ -87,9 +87,6 @@ class Chip(Base):
          self.valid = False
          self.invalid_reason = 'Wrong chip input configuration'
       
-      total_fma = math.floor(self.perf / self.freq / 2) # 2 flops per MAC
-      self.sa_width = math.floor(math.sqrt(total_fma / self.num_sa))
-      
       if self.sram:
          if self.check_area():
             self.tdp = self._get_tdp()
@@ -102,6 +99,8 @@ class Chip(Base):
                # assume the chip is a square
                self.x = math.sqrt(self.area)
                self.y = self.x
+               total_fma = math.floor(self.perf / self.freq / 2) # 2 flops per MAC
+               self.sa_width = math.floor(math.sqrt(total_fma / self.num_sa))
 
    def update_using_area_ratio(self) -> None:
       side = math.sqrt(self.area)
