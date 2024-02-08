@@ -4,8 +4,8 @@ export STRUCTS_PATH = $(abspath ./structs)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
 export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH)
 
-HARDWARE = cc hbm_explore mem_3d_explore
-MODELS = gpt2 megatron gpt3 gopher mtnlg bloom palm llama2
+HARDWARE := $(subst .yaml,,$(shell ls ./configs/hardware))
+MODELS := $(subst .yaml,,$(shell ls ./configs/models))
 
 CONFIG_DIR = configs
 HARDWARE_CONFIG_DIR = $(CONFIG_DIR)/hardware
