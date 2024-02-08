@@ -1,0 +1,113 @@
+Name: dram_3d_explore
+
+Chip:
+  # perf:
+  #   # - 138000000000000 # 138 TOPS
+  #   - 70000000000000 # 70 TOPS
+  # sram:
+  #   # - 144000000 # 144 MB
+  #   - 72000000 # 72 MB
+  # sram_bw:
+  #   # - 2000000000000 # 2 TB/s
+  #   - 1000000000000 # 1 TB/s
+  macs_density: # mm2/TOPS
+    - 0.72
+  core_area_ratio:
+    - 0.6
+  area: [100, 200, 400, 800]
+  mac_ratio:  [0.5, 0.6, 0.7, 0.8, 0.9]
+  operational_intensity: [8, 16, 32, 48, 64]
+  mem_3d_vaults: [16, 32, 45, 64, 90, 128, 180, 256, 360]
+  pkg2pkg_io:
+    io_type: 'p2p'
+    num: 16
+    bandwidth_per_io: 12500000000 # 12.5 GB/s
+    area_per_io: 0.3
+    tdp_per_io: 0.125
+
+Package:
+  num_chips: 1
+  mem_3d:
+    # HMC 2.0, 8 layers 32 MB per vault
+    # - mem_type: '3D DRAM'
+    #   config: 'HMC 2.0'
+    #   simulator: False
+    #   layer_bytes: 33554432 # 32 MB
+    #   layer_area: 2.1
+    #   layer_cost: 0.23 # same $/GB as HBM2
+    #   num_layers: 8
+    #   bandwidth: 10737418240 # 10 GB/s 
+    #   bandwidth_efficiency: 0.8
+    #   pj_per_byte: 31.2 # same as HBM2
+    - mem_type: '3D DRAM'
+      config: '50GB/s/mm2 64MB/mm2'
+      simulator: False
+      layer_bytes: 134217728 # 128 MB
+      layer_area: 2.1
+      layer_cost: 0.23 # same $/GB as HBM2
+      num_layers: 8
+      bandwidth: 107374182400 # 100 GB/s
+      bandwidth_efficiency: 0.8
+      pj_per_byte: 15.6
+    - mem_type: '3D DRAM'
+      config: '100GB/s/mm2 64MB/mm2'
+      simulator: False
+      layer_bytes: 134217728 # 128 MB
+      layer_area: 2.1
+      layer_cost: 0.23
+      num_layers: 8
+      bandwidth: 214748364800 # 200 GB/s
+      bandwidth_efficiency: 0.8
+      pj_per_byte: 15.6
+    - mem_type: '3D DRAM'
+      config: '50GB/s/mm2 128MB/mm2'
+      simulator: False
+      layer_bytes: 268435456 # 256 MB
+      layer_area: 2.1
+      layer_cost: 0.23
+      num_layers: 8
+      bandwidth: 107374182400 # 100 GB/s
+      bandwidth_efficiency: 0.8
+      pj_per_byte: 15.6
+    - mem_type: '3D DRAM'
+      config: '100GB/s/mm2 128MB/mm2'
+      simulator: False
+      layer_bytes: 268435456 # 256 MB
+      layer_area: 2.1
+      layer_cost: 0.23
+      num_layers: 8
+      bandwidth: 214748364800 # 200 GB/s
+      bandwidth_efficiency: 0.8
+      pj_per_byte: 15.6
+    - mem_type: '3D DRAM'
+      config: '100GB/s/mm2 64MB/mm2 0.5xPower'
+      simulator: False
+      layer_bytes: 134217728 # 128 MB
+      layer_area: 2.1
+      layer_cost: 0.23
+      num_layers: 8
+      bandwidth: 214748364800 # 200 GB/s
+      bandwidth_efficiency: 0.8
+      pj_per_byte: 7.8
+    # - mem_type: '3D DRAM'
+    #   config: '20xBW 10xDensity 2xCost'
+    #   simulator: False
+    #   layer_bytes: 335544320 # 320 MB
+    #   layer_area: 2.1
+    #   layer_cost: 0.46
+    #   num_layers: 8
+    #   bandwidth: 214748364800 # 200 GB/s
+    #   bandwidth_efficiency: 0.8
+    #   pj_per_byte: 15
+
+
+Server:
+  packages_per_lane: [1, 2, 3, 4, 5, 6, 7, 8]
+  # num_lanes: [2, 4]
+  package_max_power_factor: 100.0
+  custom_max_power: 6400
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 12500000000
+

@@ -1,19 +1,25 @@
 Name: hbm_explore
 
 Chip:
-  perf: # 138 TOPS
-    - 138000000000000
-  sram: # 144 MB
-    - 144000000
-  sram_bw: # 2 TB/s
-    - 2000000000000
+  # perf: # 138 TOPS
+  #   - 138000000000000
+  # sram: # 144 MB
+  #   - 144000000
+  # sram_bw: # 2 TB/s
+  #   - 2000000000000
+  # macs_density: # mm2/TOPS
+  #   - 1.0
   macs_density: # mm2/TOPS
-    - 1.0
-  # hbm_channels: [8, 16, 32] # 1, 2, 4 stacks
-  hbm_channels: [8] # 1 stack
+    - 0.72
+  core_area_ratio:
+    - 0.6
+  area: [100, 200, 400, 800]
+  mac_ratio:  [0.5, 0.6, 0.7, 0.8, 0.9]
+  operational_intensity: [8, 16, 32, 48, 64]
+  hbm_channels: [8, 16, 32, 48, 64, 80] # 1, 2, 4, 6, 8, 10 stacks
   pkg2pkg_io:
     io_type: 'p2p'
-    num: 4
+    num: 16
     bandwidth_per_io: 12500000000
     area_per_io: 0.3
     tdp_per_io: 0.125
@@ -62,7 +68,7 @@ Package:
       bandwidth_efficiency: 0.8
       # cost_per_gb: 7.2
       stack_cost: 86.4
-      pj_per_byte: 10.0
+      pj_per_byte: 15.6
     # HBM3e, 8 layers, 24 GB, 1178 GB/s
     - config: 'HBM3e_24GB'
       simulator: False
@@ -73,37 +79,35 @@ Package:
       bandwidth_efficiency: 0.8
       # cost_per_gb: 8.64
       stack_cost: 103.68
-      pj_per_byte: 7.5
-    # HBM3e, 8 layers, 24 GB, 1178 GB/s
-    - config: 'HBM3e_24GB_same_$'
-      simulator: False
-      channel_bytes: 3221225472 # 3 GB or 24 Gb
-      channel_width: 128
-      num_channels: 8
-      bit_rate: 9878424780 # 9.2 Gb/s
-      bandwidth_efficiency: 0.8
-      # cost_per_gb: 5
-      stack_cost: 60
-      pj_per_byte: 7.5
-    # Ideal
-    - config: 'Ideal(10xHBM3e)'
-      simulator: False
-      channel_bytes: 3221225472 # 3 GB or 24 Gb
-      channel_width: 128
-      num_channels: 8
-      bit_rate: 100000000000 # 100 Gb/s
-      bandwidth_efficiency: 1.0
-      # cost_per_gb: 0.1
-      stack_cost: 60
-      pj_per_byte: 0.1
-
-
-
+      pj_per_byte: 15.6
+    # # HBM3e, 8 layers, 24 GB, 1178 GB/s
+    # - config: 'HBM3e_24GB_same_$'
+    #   simulator: False
+    #   channel_bytes: 3221225472 # 3 GB or 24 Gb
+    #   channel_width: 128
+    #   num_channels: 8
+    #   bit_rate: 9878424780 # 9.2 Gb/s
+    #   bandwidth_efficiency: 0.8
+    #   # cost_per_gb: 5
+    #   stack_cost: 60
+    #   pj_per_byte: 15
+    # # Ideal
+    # - config: 'Ideal(10xHBM3e)'
+    #   simulator: False
+    #   channel_bytes: 3221225472 # 3 GB or 24 Gb
+    #   channel_width: 128
+    #   num_channels: 8
+    #   bit_rate: 100000000000 # 100 Gb/s
+    #   bandwidth_efficiency: 1.0
+    #   # cost_per_gb: 0.1
+    #   stack_cost: 60
+    #   pj_per_byte: 0.1
 
 Server:
-  # packages_per_lane: [1, 2, 4, 8, 16]
-  packages_per_lane: [1]
-  custom_max_power: 4000
+  packages_per_lane: [1, 2, 3, 4, 5, 6, 7, 8]
+  # num_lanes: [2, 4]
+  package_max_power_factor: 100.0
+  custom_max_power: 6400
   io:
     io_type: 's2s'
     num: 2

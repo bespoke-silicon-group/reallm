@@ -14,6 +14,7 @@ Chip:
     - 200
   core_area_ratio:
     - 0.95
+  hbm_channels: 8
   pkg2pkg_io:
     io_type: 'p2p'
     num: 4
@@ -24,13 +25,14 @@ Chip:
 Package:
   num_chips: 1
   hbm:
-    num_stacks: 1
-    stack_bytes: 
-     - 8589934592 # 8 GB
-    stack_bandwidth: 
-     - 659277479936 # 614 GB/s
-    cost_per_gb:
-     - 7.5 # $120 for 16 GB
+    # HBM2, 8 layers, 8 GB, 614 GB/s
+    - config: 'TPUv4i_HBM2_8GB'
+      simulator: False
+      channel_bytes: 1073741824 # 1 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 5150605312 # to make the whole stack 614 GB/s
+      bandwidth_efficiency: 0.8
 
 Server:
   packages_per_lane: 2
