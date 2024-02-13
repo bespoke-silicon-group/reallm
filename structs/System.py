@@ -89,13 +89,13 @@ class System(Base):
 
         # now we only support either 3D memory, or HBM, or SRAM
         if self.server.package.chip.mem_3d_vaults > 0:
-            if 'SRAM' or 'sram' in self.server.package.mem_3d.mem_type:
+            if 'SRAM' in self.server.package.mem_3d.mem_type or 'sram' in self.server.package.mem_3d.mem_type:
                 sram_3d_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
                 sram_3d_cap_per_chip = self.server.package.mem_3d.cap * self.server.package.chip.mem_3d_vaults
                 total_sram_per_chip = self.server.package.chip.sram + sram_3d_cap_per_chip
                 self.weight_bw_per_chip = sram_3d_bw_per_chip * sram_3d_cap_per_chip / total_sram_per_chip + \
                                           self.server.package.chip.sram_bw * self.server.package.chip.sram / total_sram_per_chip
-            elif 'DRAM' or 'dram' in self.server.package.mem_3d.mem_type:
+            elif 'DRAM' in self.server.package.mem_3d.mem_type or 'dram' in self.server.package.mem_3d.mem_type:
                 self.weight_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
             else:
                 raise ValueError('Unsupported 3D memory type.')

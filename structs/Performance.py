@@ -565,7 +565,7 @@ class MatmulLatency(Base):
         elif self.data_flow == 'simple':
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.block_comp_time = self.num_ops / self.chip.perf
-            self.block_ldst_time = (self.J * self.K) / self.weight_bw
+            self.block_ldst_time = (self.J * self.K) * self.data_bytes / self.weight_bw
             self.time = max(self.block_comp_time, self.block_ldst_time)
             self.utilization = self.num_ops / (self.time * self.chip.perf)
         else:
