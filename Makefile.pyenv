@@ -1,0 +1,44 @@
+# Root of the git repo.
+GIT_ROOT := $(shell git rev-parse --show-toplevel)
+
+# Use this variable to launch a python3 interpreter that uses the virtual env in the rest of the
+# makefile scripts.
+VENV_PYTHON3 := source $(GIT_ROOT)/pyenv/bin/activate && python3
+
+# Path to the system's python installation. Should mainly be used to setup a virtual env. The
+# infrastructure has been tested using python v3.10. We check for the version of python when
+# creating the virtual env. Change the SYSTEM_PYTHON3 variable to point to the system installation
+# of python3 you would like to use to build the virtual env. To disable version checking, set the
+# SYSTEM_PYTHON3_VERSION to *.
+SYSTEM_PYTHON3         := /usr/bin/env python3
+SYSTEM_PYTHON3_VERSION := 3.10.*
+
+# Add building the python venv as part of the setup process.
+.PHONY: setup
+setup: $(GIT_ROOT)/pyenv/touch
+
+# Delete the python virtual env.
+.PHONY: clean_pyenv
+clean_pyenv:
+	rm -rf $(GIT_ROOT)/pyenv
+
+# Saves the current python virtual env pip packages to the requirements.txt file.
+.PHONY: save_pyenv
+save_pyenv: | pyenv_dep
+	$(VENV_PYTHON3) -m pip freeze > requirements.txt
+
+# Add this target as a order-only dep to any target that uses $(VENV_PYTHON3) to make sure that the
+# python-venv is built before exectuion
+.PHONY: pyenv_dep
+pyenv_exists: | $(GIT_ROOT)/pyenv/touch
+
+# Build the python virtual env.
+$(GIT_ROOT)/pyenv/touch:
+	$(eval _system_python_version := $(word 2,$(shell $(SYSTEM_PYTHON3) -V)))
+	@(echo $(_system_python_version) | grep $(SYSTEM_PYTHON3_VERSION) > /dev/null) \
+		|| (echo "Error: system python version does not match: $(_system_python_version) != $(SYSTEM_PYTHON3_VERSION)" && false)
+	rm -rf $(@D)
+	$(SYSTEM_PYTHON3) -m venv $(@D)
+	$(VENV_PYTHON3) -m pip install --upgrade pip setuptools
+	$(VENV_PYTHON3) -m pip install -r requirements.txt
+	touch $@
