@@ -69,6 +69,18 @@ class PackageConfig(Base):
   all_configs: List[dict] = None
 
   def update(self) -> None:
+    if 'mem_3d' in self.yaml_config:
+      if isinstance(self.yaml_config['mem_3d'], Dict):
+        self.yaml_config['mem_3d'] = expand_dict(self.yaml_config['mem_3d'])
+      else:
+        # list of 3d mem configs
+        self.yaml_config['mem_3d'] = [expand_dict(mem) for mem in self.yaml_config['mem_3d']][0]
+    if 'hbm' in self.yaml_config:
+      if isinstance(self.yaml_config['hbm'], Dict):
+        self.yaml_config['hbm'] = expand_dict(self.yaml_config['hbm'])
+      else:
+        # list of hbm configs
+        self.yaml_config['hbm'] = [expand_dict(hbm) for hbm in self.yaml_config['hbm']][0]
     self.all_configs = expand_dict(self.yaml_config)
 
   def explore(self, chips: List[Chip], verbose: bool = False) -> List[Package]:
