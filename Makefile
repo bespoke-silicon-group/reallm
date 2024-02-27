@@ -44,9 +44,9 @@ define SW_GEN
 $(hardware).sw.$(model): $(OUTPUT_DIR)/$(hardware)/$(model).pkl | pyenv_exists
 $(OUTPUT_DIR)/$(hardware)/$(model).pkl: $(MODELS_CONFIG_DIR)/$(model).yaml $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
 	@if [ "$(VERBOSE)" = "true" ]; then \
-		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --results-dir $(OUTPUT_DIR)/$(hardware) --verbose; \
+		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR)/$(hardware) --verbose; \
 	else \
-		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --results-dir $(OUTPUT_DIR)/$(hardware); \
+		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR)/$(hardware); \
 	fi
 $(hardware).sw.$(model).clean:
 	rm -f $(OUTPUT_DIR)/$(hardware)/$(model).pkl

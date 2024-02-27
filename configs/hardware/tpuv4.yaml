@@ -1,0 +1,55 @@
+Name: tpuv4
+# https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v4
+# Paper: https://arxiv.org/ftp/arxiv/papers/2304/2304.01433.pdf
+
+Chip:
+  chip_id: 'tpuv4'
+  perf: # 275 TOPS
+    - 275.0e+12
+  sram: # 300 MB ??
+    - 300.0e+6
+  sram_bw: # 2 TB/s ??
+    - 2.0e+12
+  macs_density: # mm2/TOPS
+    - 0.72
+  other_area: # mm2
+    - 200
+  core_area_ratio:
+    - 0.95
+  hbm_channels: 32
+  pkg2pkg_io: # 1.1 PB/s all-reduce bandwidth per Pod, 281 GB/s per chip
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 140.5e+9
+    area_per_io: 5.0 # ??
+    tdp_per_io: 0.25 # ??
+
+Package:
+  num_chips: 1
+  hbm:
+    # HBM2, 8 channels, 8 GB, 300 GB/s
+    - config: 'TPUv4_HBM2_32GB'
+      simulator: False
+      channel_bytes: 1073741824 # 1 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 2516582400 # to make the whole stack 300 GB/s
+      bandwidth_efficiency: 0.7
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 2
+  package_max_power_factor: 100.0
+  custom_max_power: 100000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 140.5e+9
+  
+
+# System configuration for each model
+System:
+  all:
+   - num_servers: 16
+     eval_len: [[20, 8], [60, 20], [128, 8]]
+

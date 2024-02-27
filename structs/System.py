@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Tuple
 from .Base import Base
 from .Server import Server
@@ -19,9 +19,7 @@ class System(Base):
     max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    prefill_eval_ctx_len: int = 256
-    generate_eval_prefill_len: int = 128
-    generate_eval_generate_len: int = 129
+    eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
     energy_model: bool = True # whether to use the energy model for calculating the TCO
 
     asplos_version: bool = False
@@ -96,7 +94,7 @@ class System(Base):
                 self.weight_bw_per_chip = sram_3d_bw_per_chip * sram_3d_cap_per_chip / total_sram_per_chip + \
                                           self.server.package.chip.sram_bw * self.server.package.chip.sram / total_sram_per_chip
             elif 'DRAM' in self.server.package.mem_3d.mem_type or 'dram' in self.server.package.mem_3d.mem_type:
-                self.weight_bw_per_chip = self.server.package.mem_3d.bandwidth * self.server.package.chip.mem_3d_vaults
+                self.weight_bw_per_chip = self.server.package.dram_bw_per_chip
             else:
                 raise ValueError('Unsupported 3D memory type.')
         elif self.server.package.num_hbm_stacks > 0:
@@ -113,6 +111,10 @@ class System(Base):
         return True
 
     def _software_update(self) -> None:
+        prefill_len = self.eval_len[0]
+        generate_len = self.eval_len[1]
+        total_len = prefill_len + generate_len
+
         self.batch_opt_prefill_lat = dict()
         self.batch_opt_prefill_tco = dict()
         self.batch_opt_generate_lat = dict()
@@ -120,27 +122,20 @@ class System(Base):
 
         batch = 1
         while batch <= self.max_batch:
-            # prefill optimization
             # from deepspeed inference, we should use large micro batch size for prefill and small micro batch size for generate
             batch_opt_prefill_lat = float('inf')
             batch_opt_prefill_tco = float('inf')
-            mappings = self.gen_mappings(batch=batch, min_ctx_len=self.prefill_eval_ctx_len+1)
+            batch_opt_generate_lat = float('inf')
+            batch_opt_generate_tco = float('inf')
+            mappings = self.gen_mappings(batch=batch, min_ctx_len=total_len)
             for mapping in mappings:
-                perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.prefill_eval_ctx_len, generate_len=1, update_on_init=False)
-                perf.prefill_eval()
+                perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=prefill_len, generate_len=generate_len)
                 if perf.prefill_latency < batch_opt_prefill_lat:
                     batch_opt_prefill_lat = perf.prefill_latency
                     self.batch_opt_prefill_lat[batch] = perf
                 if perf.prefill_tco_per_token < batch_opt_prefill_tco:
                     batch_opt_prefill_tco = perf.prefill_tco_per_token
                     self.batch_opt_prefill_tco[batch] = perf
-            # generate optimization
-            batch_opt_generate_lat = float('inf')
-            batch_opt_generate_tco = float('inf')
-            mappings = self.gen_mappings(batch=batch, min_ctx_len=self.generate_eval_prefill_len+self.generate_eval_generate_len)
-            for mapping in mappings:
-                perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=self.generate_eval_prefill_len, generate_len=self.generate_eval_generate_len, update_on_init=False)
-                perf.generate_eval()
                 if perf.generate_latency < batch_opt_generate_lat:
                     batch_opt_generate_lat = perf.generate_latency
                     self.batch_opt_generate_lat[batch] = perf

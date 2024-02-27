@@ -7,3 +7,4 @@ class Mapping(Base):
     t: int = 1 # tensor parallelism size, number of chips per pipeline stage
     p: int = 1 # pipeline paralelism size
     micro_batch: int = 1 # micro batch size
+    prefill_micro_batch: int = 1 # micro batch size for prefill

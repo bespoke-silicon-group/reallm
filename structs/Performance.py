@@ -58,9 +58,8 @@ class Performance(Base):
             self.tco_per_token = self.generate_tco_per_token
     
     def prefill_eval(self) -> None:
-        # micro batch size for prefill is always 1
         micro_batch_latency = self._get_micro_batch_latency('prefill')
-        self.prefill_latency = micro_batch_latency.total + (self.batch - 1) * micro_batch_latency.pipeline_stage
+        self.prefill_latency = micro_batch_latency.total + (self.batch / self.mapping.prefill_micro_batch - 1) * micro_batch_latency.pipeline_stage
         self.prefill_throughput = self.batch * self.prefill_len / self.prefill_latency
 
         sys_peak_flops = self.system.perf * self.prefill_latency
@@ -297,9 +296,9 @@ class Performance(Base):
         data_bytes = self.system.model.bytes_per_number
 
         if stage == 'prefill':
-            # micro batch size for prefill is always 1
-            activation_row = self.prefill_len
-            micro_batch = 1
+            # By default, micro batch size for prefill is 1
+            micro_batch = self.mapping.prefill_micro_batch
+            activation_row = self.prefill_len * micro_batch
             atten_activation_row = activation_row
         else:
             micro_batch = self.mapping.micro_batch

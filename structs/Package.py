@@ -20,6 +20,7 @@ class Package(Base):
     si: bool = None # whether to use silicon interposer
 
     constants: PackageConstants = PackageConstantsCommon
+    custom_max_power_density: Optional[float] = None # W/mm2
 
     num_hbm_stacks: int = 0
 
@@ -68,13 +69,13 @@ class Package(Base):
         self.sram = self.num_chips * self.chip.sram
         if self.chip.mem_3d_vaults > 0:
             self.tdp += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.tdp
-            if 'SRAM' or 'sram' in self.mem_3d.mem_type:
+            if 'sram' in self.mem_3d.mem_type or 'SRAM' in self.mem_3d.mem_type:
                 self.sram += self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
                 self.dram = 0
                 self.dram_bw_per_chip = 0
-            elif 'DRAM' or 'dram' in self.mem_3d.mem_type:
+            elif 'dram' in self.mem_3d.mem_type or 'DRAM' in self.mem_3d.mem_type:
                 self.dram = self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
-                self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults
+                self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults * self.mem_3d.bandwidth_efficiency
             else:
                 raise ValueError('Memory 3D vault type is not supported')
         elif self.num_hbm_stacks > 0:
@@ -119,6 +120,7 @@ class Package(Base):
             if self.chip.mem_3d_vaults * self.mem_3d.area > self.chip.area:
                 self.invalid_reason = f'Not enough space to place {self.chip.mem_3d_vaults} 3D memory vaults'
                 return False
+            self.heatsource_length = max(self.chip.x, self.chip.y) * math.ceil(math.sqrt(self.num_chips))
         if self.num_hbm_stacks > 0:
             # check the physical layout of HBM to see if there is enough space to place it
             # now we only allow HBM to be placed on the long side of the chip
@@ -153,7 +155,13 @@ class Package(Base):
     
     def check_thermal(self) -> bool:
         self.power_density = self.tdp / (self.heatsource_length * self.heatsource_width)
-        if self.power_density <= self.constants.max_power_density:
+        if self.custom_max_power_density:
+            if self.power_density <= self.custom_max_power_density:
+                return True
+            else:
+                self.invalid_reason = f'Power density {self.power_density} W/mm2 is higher than the custom max power density {self.custom_max_power_density} W/mm2'
+                return False
+        elif self.power_density <= self.constants.max_power_density:
             return True
         else:
             self.invalid_reason = f'Power density {self.power_density} W/mm2 is higher than the max power density {self.constants.max_power_density} W/mm2'
