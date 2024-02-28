@@ -15,7 +15,6 @@ class Memory(Base):
     area: Optional[float] = None # in mm2
     tdp: Optional[float] = None # in watt
     cost: Optional[float] = None # in $
-    bandwidth_efficiency: Optional[float] = None # the ratio of the actual bandwidth to the theoretical bandwidth
 
     def update(self) -> None:
         pass

@@ -75,7 +75,7 @@ class Package(Base):
                 self.dram_bw_per_chip = 0
             elif 'dram' in self.mem_3d.mem_type or 'DRAM' in self.mem_3d.mem_type:
                 self.dram = self.num_chips * self.chip.mem_3d_vaults * self.mem_3d.cap
-                self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults * self.mem_3d.bandwidth_efficiency
+                self.dram_bw_per_chip = self.mem_3d.bandwidth * self.chip.mem_3d_vaults
             else:
                 raise ValueError('Memory 3D vault type is not supported')
         elif self.num_hbm_stacks > 0:
@@ -84,7 +84,7 @@ class Package(Base):
             if self.hbm.simulator:
                 total_dram_bw = self._get_bw_from_simulator()
             else:
-                total_dram_bw = self.hbm.bandwidth * self.num_hbm_stacks * self.hbm.bandwidth_efficiency
+                total_dram_bw = self.hbm.bandwidth * self.num_hbm_stacks
             self.dram_bw_per_chip = total_dram_bw / self.num_chips
         else:
             self.dram = 0

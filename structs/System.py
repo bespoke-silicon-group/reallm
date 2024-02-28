@@ -21,6 +21,9 @@ class System(Base):
     max_batch: int = 1024 # max batch size
     eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
     energy_model: bool = True # whether to use the energy model for calculating the TCO
+    compute_perf_efficiency: float = 1.0 # the ratio of the actual compute performance to the theoretical performance
+    io_bandwidth_efficiency: float = 1.0 # the ratio of the actual IO bandwidth to the theoretical bandwidth
+    weight_bandwidth_efficiency: float = 1.0 # the ratio of the actual weight bandwidth to the theoretical bandwidth
 
     asplos_version: bool = False
 
@@ -101,6 +104,8 @@ class System(Base):
             self.weight_bw_per_chip = self.server.package.dram_bw_per_chip
         else:
             self.weight_bw_per_chip = self.server.package.chip.sram_bw
+
+        self.weight_bw_per_chip *= self.weight_bandwidth_efficiency
         self.kv_bw_per_chip = self.weight_bw_per_chip
         
         self.perf = self.num_servers * self.server.perf

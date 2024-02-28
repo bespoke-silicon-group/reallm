@@ -70,19 +70,9 @@ class Performance(Base):
         self.prefill_power = self.prefill_core_energy.total / self.prefill_latency + self.system.other_tdp
 
         self.prefill_srv_tco, self.prefill_tco_per_token = self._get_tco('prefill')
-        
-        if micro_batch_latency.communication > micro_batch_latency.compute:
-            self.prefill_bottleneck = 'Interconnect'
-        else:
-            mm = micro_batch_latency.atten_qkv
-            if mm.utilization < 0.98:
-                self.prefill_bottleneck = 'Bandwidth'
-            else:
-                if self.prefill_utilization > 0.5:
-                    self.prefill_bottleneck = 'Compute'
-                else:
-                    self.prefill_bottleneck = 'Unknown'
 
+        self.prefill_bottleneck = self._get_bottleneck(micro_batch_latency)
+        
     def generate_eval(self) -> None:
         """
         The throughput of generate stage depends on how we do micro-batch and pipeline parallelism.
@@ -140,17 +130,24 @@ class Performance(Base):
 
         self.generate_srv_tco, self.generate_tco_per_token = self._get_tco('generate')
 
-        if micro_batch_latency.communication > micro_batch_latency.compute:
-            self.generate_bottleneck = 'Interconnect'
-        else:
-            mm = micro_batch_latency.atten_qkv
-            if mm.utilization < 0.98:
-                self.generate_bottleneck = 'Bandwidth'
+        self.generate_bottleneck = self._get_bottleneck(micro_batch_latency)
+
+    def _get_bottleneck(self, lat: MicroBatchLatency) -> str:
+        t_io = lat.communication
+        t_mem = 0
+        t_comp = 0
+        for k in ['atten_qkv', 'atten_matmul1', 'atten_matmul2', 'atten_fc', 'fc1', 'fc2']:
+            mm = getattr(lat, k)
+            if mm.block_ldst_time > mm.block_comp_time:
+                t_mem += (mm.block_ldst_time * lat.num_layers)
             else:
-                if self.generate_utilization > 0.5:
-                    self.generate_bottleneck = 'Compute'
-                else:
-                    self.generate_bottleneck = 'Unknown'
+                t_comp += (mm.block_comp_time * lat.num_layers)
+        if t_io > t_mem and t_io > t_comp:
+            return 'Interconnect'
+        elif t_mem > t_io and t_mem > t_comp:
+            return 'Memory'
+        elif t_comp > t_io and t_comp > t_mem:
+            return 'Compute'
     
     def _get_tco(self, stage: str) -> Tuple[TCO, float]:
         '''
@@ -288,6 +285,10 @@ class Performance(Base):
         Calculate the latency of one micro-batch inference.
         We adopt weight stationary, all weights/kv-cache will be read only once.
 
+        TODO: According to Figure 3 in 'Efficiently Scaling Transformer Inference' 
+        (https://arxiv.org/pdf/2211.05102.pdf), we may need to consider the weight-gathered 
+        layout when tokens per micro-batch is large.
+
         :param stage: the stage of inference, either 'prefill' or 'generate'
         :return: the latency of one inference, in sec
         """
@@ -340,7 +341,10 @@ class Performance(Base):
             # stage2stage_bw = ((p_srv - 1) * self.system.server.package.io.bandwidth + self.system.server.io.bandwidth) / p_srv
 
         # need to add the initialization time for each data transfer
-        stage2stage_latency = activation_size * data_bytes / stage2stage_bw + self.system.server.io.init_time
+        stage2stage_latency = activation_size * data_bytes / (stage2stage_bw * self.system.io_bandwidth_efficiency)+ self.system.server.io.init_time
+
+        # Set the compute performance efficiency
+        self.system.server.package.chip.compute_perf_efficiency = self.system.compute_perf_efficiency
 
         ##################################################################
         # We adopt the same partitioning scheme as Megatron-LM
@@ -462,7 +466,7 @@ class Performance(Base):
         if collective_links is IO:
             collective_links = [collective_links]
         bottleneck_link = min(collective_links, key=lambda link: link.bandwidth)
-        bandwidth = bottleneck_link.bandwidth
+        bandwidth = bottleneck_link.bandwidth * self.system.io_bandwidth_efficiency
         init_time = bottleneck_link.init_time
 
         chunk_bytes = num_bytes / num_nodes
@@ -563,7 +567,7 @@ class MatmulLatency(Base):
             self.utilization = self.num_ops / (self.time * self.chip.perf)
         elif self.data_flow == 'simple':
             self.num_ops = stacks * self.I * self.J * self.K * 2
-            self.block_comp_time = self.num_ops / self.chip.perf
+            self.block_comp_time = self.num_ops / (self.chip.perf * self.chip.compute_perf_efficiency)
             self.block_ldst_time = (self.J * self.K) * self.data_bytes / self.weight_bw
             self.time = max(self.block_comp_time, self.block_ldst_time)
             self.utilization = self.num_ops / (self.time * self.chip.perf)
