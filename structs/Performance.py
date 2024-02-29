@@ -226,21 +226,21 @@ class Performance(Base):
         # For activation: 
         # FC: 1 in Q,K,V projection, 1 in post-atten, 1 in FF1, 4 in FF2
         # Matmul: 2 in attention matmul
+        # TODO: double check, add the case when d_head * d_model != d
         if stage == 'prefill':
-            # prefill micro batch size is always 1
-            num_acts_per_layer_fc = 7 * d_model * self.prefill_len * 1
-            num_acts_per_layer_matmul = 2 * d_model * self.prefill_len * 1
+            num_acts_per_layer_fc = 7 * d_model * self.prefill_len * self.mapping.prefill_micro_batch
+            num_acts_per_layer_matmul = 2 * d_model * self.prefill_len * self.mapping.prefill_micro_batch
             num_acts_per_layer = num_acts_per_layer_fc + num_acts_per_layer_matmul
             num_acts_total = n_layers * num_acts_per_layer
 
             num_kvcache_per_layer = 2 * d_model * self.prefill_len
             num_kvcache_total = n_layers * num_kvcache_per_layer
 
-            gemm_fma_energy = num_weights_total * self.prefill_len * 1 * EnergyConstants.fma_fp16
-            matmul_fma_energy = num_kvcache_total * self.prefill_len * 1 * EnergyConstants.fma_fp16
+            gemm_fma_energy = num_weights_total * self.prefill_len * self.mapping.prefill_micro_batch * EnergyConstants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * self.prefill_len * self.mapping.prefill_micro_batch * EnergyConstants.fma_fp16
 
             # 2 all-reduce per layer
-            num_allreduce_per_layer = 2 * d_model * self.prefill_len * 1 * self.mapping.t
+            num_allreduce_per_layer = 2 * d_model * self.prefill_len * self.mapping.prefill_micro_batch * self.mapping.t
             num_allreduce_total = n_layers * num_allreduce_per_layer
 
         elif stage == 'generate':
@@ -272,7 +272,7 @@ class Performance(Base):
         comm_energy = num_allreduce_total * bytes_per_word * link_pj_per_byte
 
         if stage == 'prefill':
-            num_iters = self.batch
+            num_iters = self.batch / self.mapping.prefill_micro_batch
         elif stage == 'generate':
             num_iters = self.batch / self.mapping.micro_batch * self.generate_len
 
@@ -300,13 +300,10 @@ class Performance(Base):
             # By default, micro batch size for prefill is 1
             micro_batch = self.mapping.prefill_micro_batch
             activation_row = self.prefill_len * micro_batch
-            atten_activation_row = activation_row
         else:
             micro_batch = self.mapping.micro_batch
             activation_row = micro_batch
-            atten_activation_row = activation_row * (self.prefill_len + self.generate_len / 2)
-            if self.asplos_version:
-                atten_activation_row = activation_row * 20
+
         activation_col = d
         activation_size = activation_row * activation_col
 
@@ -364,25 +361,43 @@ class Performance(Base):
         B = (d, math.ceil(3 * d / t))
         atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
-        # attention matmul: Q * K_T, (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
+        # attention matmul: Q * K_T, 
+        # prefill: (micro_batch, ctx_len, d / t) * (micro_batch, d / t, ctx_len)
+        # generate: (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
         # in ASPLOS submission
         if self.asplos_version:
             A = (micro_batch, 1, d / t)
-            B = (micro_batch, d / t, atten_activation_row)
+            B = (micro_batch, d / t, micro_batch * 20)
         else:
-            A = (micro_batch, 1, math.ceil(d / t))
-            B = (micro_batch, math.ceil(d / t), atten_activation_row)
+            if stage == 'prefill':
+                A = (micro_batch, self.prefill_len, math.ceil(d / t))
+                B = (micro_batch, math.ceil(d / t), self.prefill_len)
+            else:
+                A = (micro_batch, 1, math.ceil(d / t))
+                B = (micro_batch, math.ceil(d / t), self.prefill_len + self.generate_len / 2)
         atten_matmul1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         if t > self.system.model.num_heads:
             # DOUBLE CHECK HERE
             chips_per_head = int(t / self.system.model.num_heads)
-            atten_communication_latency_1 = self._get_ring_all_reduce_latency(chips_per_head, atten_activation_row * data_bytes, collective_links)
+            if self.asplos_version:
+                atten_allreduce_size = micro_batch * 20
+            elif stage == 'prefill':
+                atten_allreduce_size = self.prefill_len
+            else:
+                atten_allreduce_size = self.prefill_len + self.generate_len / 2
+            atten_communication_latency_1 = self._get_ring_all_reduce_latency(chips_per_head, atten_allreduce_size * data_bytes, collective_links)
         else:
             atten_communication_latency_1 = 0.0
         ##################################################################
-        # attention matmul: S * V, (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
-        A = (micro_batch, 1, atten_activation_row)
-        B = (micro_batch, atten_activation_row, math.ceil(d / t))
+        # attention matmul: S * V, 
+        # prefill: (micro_batch, ctx_len, ctx_len) * (micro_batch, ctx_len, d / t)
+        # generate: (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
+        if stage == 'prefill':
+            A = (micro_batch, self.prefill_len, self.prefill_len)
+            B = (micro_batch, self.prefill_len, math.ceil(d / t))
+        else:
+            A = (micro_batch, 1, self.prefill_len + self.generate_len / 2)
+            B = (micro_batch, self.prefill_len + self.generate_len / 2, math.ceil(d / t))
         atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
         # it is able to compute part of the atten_out O

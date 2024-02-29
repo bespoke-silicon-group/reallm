@@ -137,8 +137,13 @@ class Server(Base):
                       cost_dcdc + \
                       cost_psu + \
                       system_cost
+        self.cost_all_package = cost_all_package
+        self.cost_all_heatsinks = cost_all_heatsinks
+        self.cost_all_fans = cost_all_fans
+        self.cost_all_ethernet = cost_all_ethernet
         self.cost_dcdc = cost_dcdc
         self.cost_psu = cost_psu
+        self.cost_system = system_cost
         
         return server_cost
 

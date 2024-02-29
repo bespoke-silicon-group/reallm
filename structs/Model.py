@@ -8,6 +8,7 @@ class Model(Base):
     num_layers: int
     d: int
     num_heads: int
+    d_head: Optional[int] = None
     heads_per_kv_cache: int = 1 # number of heads that share the same kv cache, 1 <= heads_per_kv_cache <= num_heads and should be a divisor of num_heads
                                 # 1 means each head has its own kv cache, i.e., multihead attention
                                 # num_heads means all heads share the same kv cache, i.e., multiquery attention
@@ -20,26 +21,34 @@ class Model(Base):
     kv_cache_size_per_token_byte: Optional[int] = None # kv cache size per token, in bytes
 
     def update(self) -> None:
+        if self.d_head is None:
+            self.d_head = self.d // self.num_heads
         self.model_size = self._get_model_size()
         self.model_size_byte = self.model_size * self.bytes_per_number
         self.kv_cache_size_per_token = self._get_kv_cache_size()
         self.kv_cache_size_per_token_byte = self.kv_cache_size_per_token * self.bytes_per_number
 
     def _get_model_size(self) -> int:
-        return self.num_layers * 3 * 4 * self.d * self.d
+        atten_size = self.num_heads * 4 * self.d * self.d_head
+        ffn_size = 2 * 4 * self.d * self.d
+        return self.num_layers * (atten_size + ffn_size)
 
     def _get_kv_cache_size(self) -> int:
-        return self.num_layers * 2 * self.d / self.heads_per_kv_cache
+        return self.num_layers * 2 * self.num_heads * self.d_head / self.heads_per_kv_cache
     
     def get_prefill_flops(self, ctx_len: int) -> int:
-        fc_flops = self.num_layers * 3 * 4 * self.d * self.d * ctx_len * 2
-        atten_flops = self.num_layers * 2 * self.d * ctx_len * ctx_len * 2
-        return fc_flops + atten_flops
+        atten_fc_flops = self.num_heads * 4 * self.d * self.d_head * ctx_len * 2
+        ffn_fc_flops = 2 * 4 * self.d * self.d * ctx_len * 2
+        fc_flops = self.num_layers * (atten_fc_flops + ffn_fc_flops)
+        self_atten_flops = self.num_layers * 2 * self.num_heads * self.d_head * ctx_len * ctx_len * 2
+        return fc_flops + self_atten_flops
         
     def get_generate_flops(self, ctx_len: int) -> int:
-        fc_flops = self.num_layers * 3 * 4 * self.d * self.d * 2
-        atten_flops = self.num_layers * 2 * self.d * ctx_len * 1 * 2
-        return fc_flops + atten_flops
+        atten_fc_flops = self.num_heads * 4 * self.d * self.d_head * 2
+        ffn_fc_flops = 2 * 4 * self.d * self.d * 2
+        fc_flops = self.num_layers * (atten_fc_flops + ffn_fc_flops)
+        self_atten_flops = self.num_layers * 2 * self.num_heads * self.d_head * ctx_len * 1 * 2
+        return fc_flops + self_atten_flops
     
 
 
