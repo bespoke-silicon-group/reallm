@@ -11,6 +11,7 @@ from .Mapping import Mapping
 class System(Base):
     server: Server
     model: Model
+    allreduce_algo: str = 'ring'
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
     num_servers: Optional[int] = None # number of servers
@@ -44,6 +45,8 @@ class System(Base):
     batch_opt_prefill_tco: Optional[dict[int, Performance]] = None # batch size to optimized prefill TCO/Token performance
     batch_opt_generate_lat: Optional[dict[int, Performance]] = None # batch size to optimized generate latency performance
     batch_opt_generate_tco: Optional[dict[int, Performance]] = None # batch size to optimized generate TCO/Token performance
+
+    default_mapping: Optional[Mapping] = None
 
     def update(self) -> None:
         self.valid = self._hardware_update()
@@ -132,7 +135,15 @@ class System(Base):
             batch_opt_prefill_tco = float('inf')
             batch_opt_generate_lat = float('inf')
             batch_opt_generate_tco = float('inf')
-            mappings = self.gen_mappings(batch=batch, min_ctx_len=total_len)
+            if self.default_mapping:
+                mapping = Mapping(**self.default_mapping)
+                if mapping.micro_batch == 0:
+                    mapping.micro_batch = batch
+                if mapping.prefill_micro_batch == 0:
+                    mapping.prefill_micro_batch = batch
+                mappings = [mapping]
+            else:
+                mappings = self.gen_mappings(batch=batch, min_ctx_len=total_len)
             for mapping in mappings:
                 perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=prefill_len, generate_len=generate_len)
                 if perf.prefill_latency < batch_opt_prefill_lat:

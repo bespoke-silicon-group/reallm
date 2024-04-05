@@ -385,7 +385,7 @@ class Performance(Base):
                 atten_allreduce_size = self.prefill_len
             else:
                 atten_allreduce_size = self.prefill_len + self.generate_len / 2
-            atten_communication_latency_1 = self._get_ring_all_reduce_latency(chips_per_head, atten_allreduce_size * data_bytes, collective_links)
+            atten_communication_latency_1 = self._get_allreduce_latency(chips_per_head, atten_allreduce_size * data_bytes, collective_links, self.system.allreduce_algo)
         else:
             atten_communication_latency_1 = 0.0
         ##################################################################
@@ -411,8 +411,8 @@ class Performance(Base):
         atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
-        atten_all_to_all_latency = self._get_ring_all_reduce_latency(t, d * data_bytes, collective_links) / 2 # half of the latency of all-reduce
-        atten_all_reduce_latnecy = self._get_ring_all_reduce_latency(t, activation_row * d * data_bytes, collective_links)
+        atten_all_to_all_latency = self._get_allreduce_latency(t, d * data_bytes, collective_links, self.system.allreduce_algo) / 2 # half of the latency of all-reduce
+        atten_all_reduce_latnecy = self._get_allreduce_latency(t, activation_row * d * data_bytes, collective_links, self.system.allreduce_algo)
         if d == 18432: # PaLM, parallel Atten and FC, ring-all reduce is overlapped, but there is 2 all-to-all on activation (batch size = 1)
           atten_communication_latency_2 = 2 * atten_all_to_all_latency
         elif d == 8192: # Llama, need 2 all-to-all on activation
@@ -449,7 +449,8 @@ class Performance(Base):
             fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.floor(math.sqrt(t)), collective_links)
         else:
             # Double check this
-            fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.sqrt(t), collective_links)
+            # fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.sqrt(t), collective_links)
+            fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes * 4, collective_links, self.system.allreduce_algo)
 
         micro_batch_latency = MicroBatchLatency(self.mapping.p, 
                                                 self.system.model.num_layers, 
@@ -466,9 +467,47 @@ class Performance(Base):
 
         return micro_batch_latency 
 
+    def _get_allreduce_latency(self, num_nodes: int, num_bytes: int, collective_links: list[IO] | IO, algorithm: str) -> float:
+        """""
+        Calculate the latency of all-reduce.
+
+        :param num_nodes: number of nodes
+        :param num_bytes: number of bytes of each node to all-reduce
+        :param collective_links: the links used for collective communication
+        :param algorithm: the algorithm used for all-reduce, either 'ring', '2d_ring', or '3d_ring'
+        :return: the latency of all-reduce, in sec
+        """
+
+        if num_nodes == 1:
+            return 0
+
+        if collective_links is IO:
+            collective_links = [collective_links]
+        bottleneck_link = min(collective_links, key=lambda link: link.bandwidth)
+        bandwidth = bottleneck_link.bandwidth * self.system.io_bandwidth_efficiency
+        init_time = bottleneck_link.init_time
+
+        alpha = init_time
+        beta = 1 / bandwidth
+        p = num_nodes
+        n = num_bytes
+
+        if algorithm == 'ring':
+            t = 2 * (p - 1) * (alpha + beta * n / p)
+        elif algorithm == '2d_ring':
+            sqrt_p = math.ceil(math.sqrt(p))
+            t = 2 * (sqrt_p - 1) * (2 * alpha + beta * n / sqrt_p)
+        elif algorithm == '3d_ring':
+            cbrt_p = math.ceil(p ** (1/3))
+            t = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p)
+        else:
+            raise ValueError('Invalid algorithm for all-reduce')
+        return t
 
     def _get_ring_all_reduce_latency(self, num_nodes: int, num_bytes: int, collective_links: list[IO] | IO) -> float:
         """
+        Deprecated, use _get_all_reduce_latency instead.
+
         Calculate the latency of ring all-reduce, based on the formula in the Appendix A.1 
         of paper Efficiently Scaling Transformer Inference (https://arxiv.org/pdf/2211.05102.pdf)
         We add the support for multiple different links and the data transfer initialization time.
@@ -583,7 +622,7 @@ class MatmulLatency(Base):
         elif self.data_flow == 'simple':
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.block_comp_time = self.num_ops / (self.chip.perf * self.chip.compute_perf_efficiency)
-            self.block_ldst_time = (self.J * self.K) * self.data_bytes / self.weight_bw
+            self.block_ldst_time = stacks * (self.J * self.K) * self.data_bytes / self.weight_bw
             self.time = max(self.block_comp_time, self.block_ldst_time)
             self.utilization = self.num_ops / (self.time * self.chip.perf)
         else:
