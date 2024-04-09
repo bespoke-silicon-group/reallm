@@ -20,6 +20,9 @@ class Model(Base):
     kv_cache_size_per_token: Optional[int] = None # kv cache size per token
     kv_cache_size_per_token_byte: Optional[int] = None # kv cache size per token, in bytes
 
+    num_experts: int = 1
+    top_k_experts: int = 1
+
     def update(self) -> None:
         if self.d_head is None:
             self.d_head = self.d // self.num_heads
@@ -30,27 +33,25 @@ class Model(Base):
 
     def _get_model_size(self) -> int:
         atten_size = self.num_heads * 4 * self.d * self.d_head
-        ffn_size = 2 * 4 * self.d * self.d
-        return self.num_layers * (atten_size + ffn_size)
+        ffn_size = 2 * 4 * self.d * self.d * self.num_experts
+        gate_size = 0
+        if self.num_experts > 1:
+            gate_size = self.d * self.num_experts
+        return self.num_layers * (atten_size + ffn_size + gate_size)
 
     def _get_kv_cache_size(self) -> int:
         return self.num_layers * 2 * self.num_heads * self.d_head / self.heads_per_kv_cache
-    
+
     def get_prefill_flops(self, ctx_len: int) -> int:
         atten_fc_flops = self.num_heads * 4 * self.d * self.d_head * ctx_len * 2
-        ffn_fc_flops = 2 * 4 * self.d * self.d * ctx_len * 2
+        ffn_fc_flops = 2 * 4 * self.d * self.d * ctx_len * 2 * self.top_k_experts
         fc_flops = self.num_layers * (atten_fc_flops + ffn_fc_flops)
         self_atten_flops = self.num_layers * 2 * self.num_heads * self.d_head * ctx_len * ctx_len * 2
         return fc_flops + self_atten_flops
-        
+
     def get_generate_flops(self, ctx_len: int) -> int:
         atten_fc_flops = self.num_heads * 4 * self.d * self.d_head * 2
-        ffn_fc_flops = 2 * 4 * self.d * self.d * 2
+        ffn_fc_flops = 2 * 4 * self.d * self.d * 2 * self.top_k_experts
         fc_flops = self.num_layers * (atten_fc_flops + ffn_fc_flops)
         self_atten_flops = self.num_layers * 2 * self.num_heads * self.d_head * ctx_len * 1 * 2
         return fc_flops + self_atten_flops
-    
-
-
-
-    

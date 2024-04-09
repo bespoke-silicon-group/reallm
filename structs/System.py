@@ -19,7 +19,7 @@ class System(Base):
     max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
+    eval_len: list[int] = field(default_factory=lambda: [128, 129]) # evaluation length for prefill and generate
     energy_model: bool = True # whether to use the energy model for calculating the TCO
     compute_perf_efficiency: float = 1.0 # the ratio of the actual compute performance to the theoretical performance
     io_bandwidth_efficiency: float = 1.0 # the ratio of the actual IO bandwidth to the theoretical bandwidth
@@ -52,7 +52,7 @@ class System(Base):
 
     def get_perf(self, prefill_len, generate_len) -> Performance:
         return Performance(system=self, prefill_len=prefill_len, generate_len=generate_len)
-    
+
     def _hardware_update(self) -> None:
         # update the number of servers using the kv cache ratio
         if self.kv_cache_ratio or self.max_ctx_len_batch_1:
@@ -107,12 +107,12 @@ class System(Base):
 
         self.weight_bw_per_chip *= self.weight_bandwidth_efficiency
         self.kv_bw_per_chip = self.weight_bw_per_chip
-        
+
         self.perf = self.num_servers * self.server.perf
         self.tdp = self.num_servers * self.server.tdp
         self.core_tdp = self.num_servers * self.server.core_tdp
         self.other_tdp = self.tdp - self.core_tdp
-        
+
         return True
 
     def _software_update(self) -> None:
@@ -144,7 +144,7 @@ class System(Base):
                 if perf.generate_latency < batch_opt_generate_lat:
                     batch_opt_generate_lat = perf.generate_latency
                     self.batch_opt_generate_lat[batch] = perf
-                if perf.generate_tco_per_token < batch_opt_generate_tco: 
+                if perf.generate_tco_per_token < batch_opt_generate_tco:
                     batch_opt_generate_tco = perf.generate_tco_per_token
                     self.batch_opt_generate_tco[batch] = perf
             batch *= 2
@@ -156,7 +156,7 @@ class System(Base):
             if self.model.num_layers % p != 0:
                 continue
 
-            # multiple servers per pipeline stage, t_srv needs to be integer 
+            # multiple servers per pipeline stage, t_srv needs to be integer
             if self.num_servers >= p:
                 t_srv = self.num_servers // p # int
                 t_pkg = t_srv * self.server.num_packages # int
@@ -167,7 +167,7 @@ class System(Base):
                 t_srv = self.num_servers / p # float
                 num_pipeline_per_server = p / self.num_servers # int
                 t_pkg = self.server.num_packages // num_pipeline_per_server # int
-            
+
             # check if there's enough memory for the model parameter
             total_used_mem = t_pkg * self.server.package.total_mem * p
             if total_used_mem < (self.model.model_size_byte + batch * min_ctx_len * self.model.kv_cache_size_per_token_byte):
@@ -184,4 +184,3 @@ class System(Base):
                     micro_batch *= 2
 
         return valid_mappings
-

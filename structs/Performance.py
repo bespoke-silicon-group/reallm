@@ -56,7 +56,7 @@ class Performance(Base):
             self.generate_eval()
             self.srv_tco = self.generate_srv_tco
             self.tco_per_token = self.generate_tco_per_token
-    
+
     def prefill_eval(self) -> None:
         micro_batch_latency = self._get_micro_batch_latency('prefill')
         self.prefill_latency = micro_batch_latency.total + (self.batch / self.mapping.prefill_micro_batch - 1) * micro_batch_latency.pipeline_stage
@@ -72,7 +72,7 @@ class Performance(Base):
         self.prefill_srv_tco, self.prefill_tco_per_token = self._get_tco('prefill')
 
         self.prefill_bottleneck = self._get_bottleneck(micro_batch_latency)
-        
+
     def generate_eval(self) -> None:
         """
         The throughput of generate stage depends on how we do micro-batch and pipeline parallelism.
@@ -84,7 +84,7 @@ class Performance(Base):
             --==    --==
               --==    --==
         so on average it takes 8 cycels to generate 1 token for the whole batch.
-        This is because to start generating the next token of a micro-batch, 
+        This is because to start generating the next token of a micro-batch,
         we need to finish the previous token of that micro-batch.
 
         If we do 4 pipeline stages, and 4 micro-batches (-, =, + and *), we have:
@@ -137,18 +137,21 @@ class Performance(Base):
         t_mem = 0
         t_comp = 0
         for k in ['atten_qkv', 'atten_matmul1', 'atten_matmul2', 'atten_fc', 'fc1', 'fc2']:
-            mm = getattr(lat, k)
-            if mm.block_ldst_time > mm.block_comp_time:
-                t_mem += (mm.block_ldst_time * lat.num_layers)
-            else:
-                t_comp += (mm.block_comp_time * lat.num_layers)
+            mm_list = getattr(lat, k)
+            if not isinstance(mm_list, (list,tuple)):
+                mm_list = [mm_list]
+            for mm in mm_list:
+                if mm.block_ldst_time > mm.block_comp_time:
+                    t_mem += (mm.block_ldst_time * lat.num_layers)
+                else:
+                    t_comp += (mm.block_comp_time * lat.num_layers)
         if t_io > t_mem and t_io > t_comp:
             return 'Interconnect'
         elif t_mem > t_io and t_mem > t_comp:
             return 'Memory'
         elif t_comp > t_io and t_comp > t_mem:
             return 'Compute'
-    
+
     def _get_tco(self, stage: str) -> Tuple[TCO, float]:
         '''
         Calculate the server TCO of prefill or generate.
@@ -190,12 +193,12 @@ class Performance(Base):
         tco_per_token = tco_per_sec / throughput
 
         return srv_tco, tco_per_token
-    
+
     def _get_core_energy(self, stage: str) -> Energy:
         '''
         Calculate the total core energy of prefill or generate.
-        It includes the energy of FMA, memory access, and communication. 
-        Memory access includes the energy of reading weights and kv from SRAM or HBM for once, 
+        It includes the energy of FMA, memory access, and communication.
+        Memory access includes the energy of reading weights and kv from SRAM or HBM for once,
         and reading activation from SRAM for once.
         Communication only includes the energy of all-reduce on the chip to chip link.
         This will be the lower bound of the real energy consumption.
@@ -223,7 +226,7 @@ class Performance(Base):
         num_weights_total = n_layers * num_weights_per_layer
         weight_mem_energy = num_weights_total * bytes_per_word * weight_mem_energy
 
-        # For activation: 
+        # For activation:
         # FC: 1 in Q,K,V projection, 1 in post-atten, 1 in FF1, 4 in FF2
         # Matmul: 2 in attention matmul
         # TODO: double check, add the case when d_head * d_model != d
@@ -276,8 +279,8 @@ class Performance(Base):
         elif stage == 'generate':
             num_iters = self.batch / self.mapping.micro_batch * self.generate_len
 
-        return Energy(fma=fma_energy * num_iters / 1e12, 
-                      mem=mem_energy * num_iters / 1e12 , 
+        return Energy(fma=fma_energy * num_iters / 1e12,
+                      mem=mem_energy * num_iters / 1e12 ,
                       comm=comm_energy * num_iters / 1e12)
 
     def _get_micro_batch_latency(self, stage: str) -> MicroBatchLatency:
@@ -285,8 +288,8 @@ class Performance(Base):
         Calculate the latency of one micro-batch inference.
         We adopt weight stationary, all weights/kv-cache will be read only once.
 
-        TODO: According to Figure 3 in 'Efficiently Scaling Transformer Inference' 
-        (https://arxiv.org/pdf/2211.05102.pdf), we may need to consider the weight-gathered 
+        TODO: According to Figure 3 in 'Efficiently Scaling Transformer Inference'
+        (https://arxiv.org/pdf/2211.05102.pdf), we may need to consider the weight-gathered
         layout when tokens per micro-batch is large.
 
         :param stage: the stage of inference, either 'prefill' or 'generate'
@@ -346,10 +349,10 @@ class Performance(Base):
         ##################################################################
         # We adopt the same partitioning scheme as Megatron-LM
         # (https://arxiv.org/pdf/1909.08053.pdf, Figure 3 (b))
-        # The difference is that we do not require the tensor parallelism 
+        # The difference is that we do not require the tensor parallelism
         # size t, which is also the number of chips per pipeline stage,
         # to smaller than number of heads. When t > num of heads,
-        # we need one more all-reduce for Q * K_T, both Q and K_T of a 
+        # we need one more all-reduce for Q * K_T, both Q and K_T of a
         # head are partitioned across (t / num_heads) chips.
         ##################################################################
         # Attention Layer
@@ -361,7 +364,7 @@ class Performance(Base):
         B = (d, math.ceil(3 * d / t))
         atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
-        # attention matmul: Q * K_T, 
+        # attention matmul: Q * K_T,
         # prefill: (micro_batch, ctx_len, d / t) * (micro_batch, d / t, ctx_len)
         # generate: (micro_batch, 1, d / t) * (micro_batch, d / t, ctx_len)
         # in ASPLOS submission
@@ -389,7 +392,7 @@ class Performance(Base):
         else:
             atten_communication_latency_1 = 0.0
         ##################################################################
-        # attention matmul: S * V, 
+        # attention matmul: S * V,
         # prefill: (micro_batch, ctx_len, ctx_len) * (micro_batch, ctx_len, d / t)
         # generate: (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
         if stage == 'prefill':
@@ -399,12 +402,12 @@ class Performance(Base):
             A = (micro_batch, 1, self.prefill_len + self.generate_len / 2)
             B = (micro_batch, self.prefill_len + self.generate_len / 2, math.ceil(d / t))
         atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
-        # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
+        # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V,
         # it is able to compute part of the atten_out O
         ##################################################################
         # attention FC to get the output
         # each chip get the activation of size (activation_row, d/t)
-        # each chip has weight of size (d/t, d) --> d/t rows, d cols, 
+        # each chip has weight of size (d/t, d) --> d/t rows, d cols,
         # so for each chip, we have (activation_row, d/t) * (d/t, d)
         A = (activation_row, math.ceil(d / t))
         B = (math.ceil(d / t), d)
@@ -427,17 +430,21 @@ class Performance(Base):
         # all chips get the whole activation of size (activation_row, d)
         # each chip has weight of size (d, 4d/t) --> d rows, 4d/t cols
         # so for each chip we have (activation_row, d) * (d, 4d/t)
-        A = (activation_row, d)
-        B = (d, math.ceil(4 * d / t))
-        fc1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+        fc1_latency = []
+        for i in range(self.system.model.top_k_experts):
+            A = (activation_row, d)
+            B = (d, math.ceil(4 * d / t))
+            fc1_latency.append(MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip))
         ##################################################################
         # FC 2
         # each chip get the activation of size (activation_row, 4d/t)
-        # each chip has weight of size (4d/t, d) --> 4d/t rows, d cols, 
+        # each chip has weight of size (4d/t, d) --> 4d/t rows, d cols,
         # each for chip we have (activation_row, 4d/t) * (4d/t, d)
-        A = (activation_row, math.ceil(4 * d / t))
-        B = (math.ceil(4 * d / t), d)
-        fc2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+        fc2_latency = []
+        for i in range(self.system.model.top_k_experts):
+            A = (activation_row, math.ceil(4 * d / t))
+            B = (math.ceil(4 * d / t), d)
+            fc2_latency.append(MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip))
         ##################################################################
         # all-reduce
         # We adopt the same partitioning scheme as EFFICIENTLY SCALING TRANSFORMER INFERENCE
@@ -446,30 +453,30 @@ class Performance(Base):
         # TODO: do we need to consider activation stationary and adopt
         # the weight-gathered layout as described in Section 3.2.3?
         if self.asplos_version:
-            fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.floor(math.sqrt(t)), collective_links)
+            fc_communication_latency = [self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.floor(math.sqrt(t)), collective_links) for _ in range(self.system.model.top_k_experts)]
         else:
             # Double check this
-            fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.sqrt(t), collective_links)
+            fc_communication_latency = [self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.sqrt(t), collective_links) for _ in range(self.system.model.top_k_experts)]
 
-        micro_batch_latency = MicroBatchLatency(self.mapping.p, 
-                                                self.system.model.num_layers, 
-                                                stage2stage_latency, 
-                                                atten_qkv_latency, 
-                                                atten_matmul1_latency, 
-                                                atten_communication_latency_1, 
-                                                atten_matmul2_latency, 
-                                                atten_fc_latency, 
-                                                atten_communication_latency_2, 
-                                                fc1_latency, 
-                                                fc2_latency, 
-                                                fc_communication_latency)
+        micro_batch_latency = MicroBatchLatency(self.mapping.p,
+                                                self.system.model.num_layers,
+                                                stage2stage_latency,
+                                                atten_qkv_latency,
+                                                atten_matmul1_latency,
+                                                atten_communication_latency_1,
+                                                atten_matmul2_latency,
+                                                atten_fc_latency,
+                                                atten_communication_latency_2,
+                                                tuple(fc1_latency),
+                                                tuple(fc2_latency),
+                                                tuple(fc_communication_latency))
 
-        return micro_batch_latency 
+        return micro_batch_latency
 
 
     def _get_ring_all_reduce_latency(self, num_nodes: int, num_bytes: int, collective_links: list[IO] | IO) -> float:
         """
-        Calculate the latency of ring all-reduce, based on the formula in the Appendix A.1 
+        Calculate the latency of ring all-reduce, based on the formula in the Appendix A.1
         of paper Efficiently Scaling Transformer Inference (https://arxiv.org/pdf/2211.05102.pdf)
         We add the support for multiple different links and the data transfer initialization time.
 
@@ -496,9 +503,9 @@ class Performance(Base):
                 return 0
             else:
                 all_reduce_time = 2 * (num_bytes / bandwidth + init_time)
-        
+
         return all_reduce_time
-    
+
 @dataclass
 class MatmulLatency(Base):
     """
@@ -559,7 +566,7 @@ class MatmulLatency(Base):
                 stacks_per_core = 1
                 cores_per_stack = math.floor(self.chip.num_sa / stacks)
                 self.K_per_core = math.ceil(self.K / cores_per_stack)
-            
+
             self.I_hat = math.ceil(self.I / self.chip.acc_depth / 2)
             self.J_hat = math.ceil(self.J / self.chip.sa_width)
             self.K_hat = math.ceil(self.K_per_core / self.chip.sa_width)
@@ -577,7 +584,7 @@ class MatmulLatency(Base):
             max_block_time = max(self.block_ldst_time, self.block_comp_time)
 
             self.time = stacks_per_core * (self.block_ldst_time + self.block_comp_time + (self.I_hat * self.J_hat * self.K_hat - 1) * max_block_time)
-            
+
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.utilization = self.num_ops / (self.time * self.chip.perf)
         elif self.data_flow == 'simple':
@@ -610,10 +617,10 @@ class MatmulLatency(Base):
     #             f.write(f'{hex(addr)} READ {base_cycle + cyc}\n')
     #             addr += columns
     #     f.close()
-        
+
     #     sim_cycles = num_cycles + 1
     #     os.system(f'make -s -f dramsim3.mak run CONFIG={self.dram_config} TRACE=trace.txt CYCLE={sim_cycles}')
- 
+
     #     with open('dramsim3.json') as json_file:
     #         data = json.load(json_file)
     #         tot_bw = 0.0
@@ -633,9 +640,9 @@ class MicroBatchLatency(Base):
     atten_matmul2: MatmulLatency
     atten_fc: MatmulLatency
     atten_communication2: float
-    fc1: MatmulLatency
-    fc2: MatmulLatency
-    fc_communication: float
+    fc1: Tuple[MatmulLatency]
+    fc2: Tuple[MatmulLatency]
+    fc_communication: Tuple[float]
 
     # derived metrics
     pipeline_stage: Optional[float] = None
@@ -660,8 +667,8 @@ class MicroBatchLatency(Base):
     communication_us: Optional[float] = None
 
     def update(self) -> None:
-        layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
-        layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
+        layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + sum([i.time for i in self.fc1]) + sum([i.time for i in self.fc2])
+        layer_communication = self.atten_communication1 + self.atten_communication2 + sum(self.fc_communication)
         self.pipeline_stage = (layer_compute + layer_communication) * (self.num_layers / self.p) + self.stage2stage
         self.total = self.pipeline_stage * self.p
         self.compute = layer_compute * self.num_layers
@@ -675,9 +682,9 @@ class MicroBatchLatency(Base):
         self.atten_matmul2_us = self.atten_matmul2.time * 1e6
         self.atten_fc_us = self.atten_fc.time * 1e6
         self.atten_communication2_us = self.atten_communication2 * 1e6
-        self.fc1_us = self.fc1.time * 1e6
-        self.fc2_us = self.fc2.time * 1e6
-        self.fc_communication_us = self.fc_communication * 1e6
+        self.fc1_us = sum([i.time for i in self.fc1]) * 1e6
+        self.fc2_us = sum([i.time for i in self.fc2]) * 1e6
+        self.fc_communication_us = sum(self.fc_communication) * 1e6
         self.pipeline_stage_us = self.pipeline_stage * 1e6
         self.total_us = self.total * 1e6
         self.compute_us = self.compute * 1e6
