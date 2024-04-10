@@ -14,6 +14,10 @@ class ChipConstants():
 
     hbm_phy_ctrl_area_per_channel: float = 1.04 # mm2
     mem_3d_tsv_ctrl_area_per_vault: float = 0.5 # mm2, double check this number
+    mem_3d_ctrl_area_per_vault: float = 0.15 # 0.62 mm2 in 28nm (https://past.date-conference.com/proceedings-archive/2015/pdf/0054.pdf, Sec. IV) 
+                                             # Since CPP of 28nm is 117nm,  of 7nm is 57nm, the area should be 0.62/(117/57)^2 = 0.15 mm2 
+                                             # https://teamvlsi.com/2021/09/tsmc-7nm-16nm-and-28nm-technology-node-comparisons.html
+    mem_3d_area_per_tsv: float = 0.0097 # mm2
 
     max_die_area: int = 900
     D0: float = 0.001 # defects/mm2 = defects/cm2/100
@@ -23,7 +27,7 @@ class ChipConstants():
     wafer_cost: int = 10000 # in $
     testing_cost_overhead: float = 0.01 # testing add 0.01 cost per die
 
-    max_power_density: float = 1.0 # Watts/mm2
+    max_power_density: float = 1.1 # Watts/mm2
 
 @dataclass
 class PackageConstants():
@@ -69,7 +73,7 @@ class ServerConstants():
     EthernetCost = 450.0      # $ for 100 GigE
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
-    LaneAreaMin = 400.0       # mm2
+    LaneAreaMin = 100.0       # mm2
     LaneAreaMax = 6000.0      # mm2
 
 @dataclass

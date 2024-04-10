@@ -1,12 +1,6 @@
-Name: dram_3d_explore
+Name: dram_3d_160tsvs
 
 Chip:
-  # perf: # 459 TOPS
-  #   - 459.0e+12
-  # sram: # 300 MB ??
-  #   - 300.0e+6
-  # sram_bw: # 2 TB/s ??
-  #   - 2.0e+12
   area: 600
   mac_ratio: 0.8
   operational_intensity: 256
@@ -16,8 +10,8 @@ Chip:
     - 70
   core_area_ratio:
     - 0.95
-  mem_3d_vaults: [81]
-  mem_3d_vault_tsvs: [64]
+  mem_3d_vaults: [64]
+  mem_3d_vault_tsvs: [160]
   pkg2pkg_io: # 300 GB/s per chip per direction
     io_type: 'p2p'
     num: 2
@@ -29,6 +23,7 @@ Chip:
 
 Package:
   num_chips: 1
+  custom_max_power_density: 1
   mem_3d:
     # 3D DRAM, 8 layers, 40 MB per layer (similar to HBM3e)
     # Bandwidth options: 60 - 120 GB/s/mm2
@@ -46,62 +41,7 @@ Package:
     #   bandwidth: 107374182400
     #   pj_per_byte: [15.0, 17.0, 19.0, 21.0, 23.0, 25.0]
     - mem_type: '3D DRAM'
-      config: '9.2 Gbps, 3 pJ/bit'
-      simulator: False
-      layer_area: 4.0
-      layer_cost: 0.75
-      density: 47757234 # bytes/mm2
-      tsv_area: 0.0097
-      num_layers: 8
-      tsvs: 64
-      bit_rate: 9.2e+9 # 9.2 Gbps 
-      pj_per_bit: 3
-    - mem_type: '3D DRAM'
-      config: '10.8 Gbps, 2.5 pJ/bit'
-      simulator: False
-      layer_area: 4.0
-      layer_cost: 0.75
-      density: 47757234 # bytes/mm2
-      tsv_area: 0.0097
-      num_layers: 8
-      tsvs: 64
-      bit_rate: 10.8e+9
-      pj_per_bit: 2.5
-    - mem_type: '3D DRAM'
-      config: '12.4 Gbps, 2.2 pJ/bit'
-      simulator: False
-      layer_area: 4.0
-      layer_cost: 0.75
-      density: 47757234 # bytes/mm2
-      tsv_area: 0.0097
-      num_layers: 8
-      tsvs: 64
-      bit_rate: 12.4e+9
-      pj_per_bit: 2.2
-    - mem_type: '3D DRAM'
-      config: '14.0 Gbps, 1.9 pJ/bit'
-      simulator: False
-      layer_area: 4.0
-      layer_cost: 0.75
-      density: 47757234 # bytes/mm2
-      tsv_area: 0.0097
-      num_layers: 8
-      tsvs: 64
-      bit_rate: 14.0e+9
-      pj_per_bit: 1.9
-    - mem_type: '3D DRAM'
-      config: '15.6 Gbps, 1.7 pJ/bit'
-      simulator: False
-      layer_area: 4.0
-      layer_cost: 0.75
-      density: 47757234 # bytes/mm2
-      tsv_area: 0.0097
-      num_layers: 8
-      tsvs: 64
-      bit_rate: 15.6e+9
-      pj_per_bit: 1.7
-    - mem_type: '3D DRAM'
-      config: '17.2 Gbps, 1.6 pJ/bit'
+      config: '64 TSVs'
       simulator: False
       layer_area: 4.0
       layer_cost: 0.75
@@ -110,6 +50,61 @@ Package:
       num_layers: 8
       tsvs: 64
       bit_rate: 17.2e+9 
+      pj_per_bit: 1.6
+    - mem_type: '3D DRAM'
+      config: '96 TSVs'
+      simulator: False
+      layer_area: 4.0
+      layer_cost: 0.75
+      density: 47757234 # bytes/mm2
+      tsv_area: 0.0097
+      num_layers: 8
+      tsvs: 96
+      bit_rate: 17.2e+9 
+      pj_per_bit: 1.6
+    - mem_type: '3D DRAM'
+      config: '128 TSVs'
+      simulator: False
+      layer_area: 4.0
+      layer_cost: 0.75
+      density: 47757234 # bytes/mm2
+      tsv_area: 0.0097
+      num_layers: 8
+      tsvs: 128
+      bit_rate: 17.2e+9 
+      pj_per_bit: 1.6
+    - mem_type: '3D DRAM'
+      config: '160 TSVs'
+      simulator: False
+      layer_area: 4.0
+      layer_cost: 0.75
+      density: 47757234 # bytes/mm2
+      tsv_area: 0.0097
+      num_layers: 8
+      tsvs: 160
+      bit_rate: 17.2e+9 
+      pj_per_bit: 1.6
+    - mem_type: '3D DRAM'
+      config: '192 TSVs'
+      simulator: False
+      layer_area: 4.0
+      layer_cost: 0.75
+      density: 47757234 # bytes/mm2
+      tsv_area: 0.0097
+      num_layers: 8
+      tsvs: 192
+      bit_rate: 17.2e+9
+      pj_per_bit: 1.6
+    - mem_type: '3D DRAM'
+      config: '224 TSVs'
+      simulator: False
+      layer_area: 4.0
+      layer_cost: 0.75
+      density: 47757234 # bytes/mm2
+      tsv_area: 0.0097
+      num_layers: 8
+      tsvs: 224
+      bit_rate: 17.2e+9
       pj_per_bit: 1.6
 
 Server:
@@ -128,14 +123,14 @@ Server:
 # System configuration for each model
 System:
   all:
-   - num_servers: 2
+   - num_servers: 6
      eval_len: [[256, 64]]
      compute_perf_efficiency: 1.0
      io_bandwidth_efficiency: 1.0
      weight_bandwidth_efficiency: 1.0
      allreduce_algo: '3d_ring'
      default_mapping:
-      - t: 8
+      - t: 24
         p: 1
         micro_batch: 0
         prefill_micro_batch: 0

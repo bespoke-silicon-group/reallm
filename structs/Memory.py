@@ -50,16 +50,31 @@ class HBM(Memory):
 
 @dataclass
 class Memory_3D_Vault(Memory):
+    tsvs: Optional[int] = None
+    bit_rate: Optional[int] = None
+    pj_per_bit: Optional[float] = None
     layer_bytes: Optional[int] = None
     layer_area: Optional[float] = None
     layer_cost: Optional[float] = None
     num_layers: Optional[int] = None
+
+    density: Optional[int] =  None # in Byte/mm2
+    tsv_area: Optional[float] = None
 
     vdd: float = 1.2 # in volt
 
     config: Optional[str] = None
 
     def update(self) -> None:
+        if self.tsvs and self.bit_rate:
+            self.bandwidth = self.tsvs * self.bit_rate / 8
+        if self.pj_per_bit:
+            self.pj_per_byte = self.pj_per_bit * 8
+        if self.density and self.tsvs and self.tsv_area:
+            total_tsv_area = self.tsvs * self.tsv_area
+            mem_cell_area = self.layer_area - total_tsv_area
+            self.layer_bytes = mem_cell_area * self.density
+        
         self.cap = self.layer_bytes * self.num_layers
         self.tdp = self.bandwidth * self.pj_per_byte * 1e-12
         self.area = self.layer_area

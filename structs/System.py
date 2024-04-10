@@ -141,6 +141,8 @@ class System(Base):
                     mapping.micro_batch = batch
                 if mapping.prefill_micro_batch == 0:
                     mapping.prefill_micro_batch = batch
+                if mapping.p == 1 and mapping.t != self.num_chips:
+                    mapping.t = self.num_chips
                 mappings = [mapping]
             else:
                 mappings = self.gen_mappings(batch=batch, min_ctx_len=total_len)

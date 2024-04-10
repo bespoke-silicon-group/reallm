@@ -6,7 +6,7 @@ from .Base import Base
 from .IO import IO
 from micro_arch_sim.design_memory import design_memory
 from micro_arch_sim.design_memory_return_area import design_memory_return_area
-from micro_arch_sim.magic_numbers import available_srams_7nm, vlsi_7nm
+from micro_arch_sim.magic_numbers import available_srams, vlsi_constants
 
 @dataclass
 class Chip(Base):
@@ -25,8 +25,10 @@ class Chip(Base):
 
    hbm_channels: int = 0 # number of HBM channels, each channel is 128 bit
    mem_3d_vaults: int = 0 # number of 3D memory vaults
+   mem_3d_vault_tsvs: Optional[int] = None
 
    tech: str = '7nm'
+   sram_tech: str = '7nm'
    # MACs density mm2/Tera BF16 ops
    macs_density: float = 2.65 # data from whole chip implementations
    # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
@@ -77,7 +79,10 @@ class Chip(Base):
       # HBM PHY and controller area
       self.other_area += self.hbm_channels * self.constants.hbm_phy_ctrl_area_per_channel
       # 3D memory TSV and controller area
-      self.other_area += self.mem_3d_vaults * self.constants.mem_3d_tsv_ctrl_area_per_vault
+      if self.mem_3d_vault_tsvs is not None:
+         self.other_area += self.mem_3d_vaults * (self.mem_3d_vault_tsvs * self.constants.mem_3d_area_per_tsv + self.constants.mem_3d_ctrl_area_per_vault)
+      else:
+         self.other_area += self.mem_3d_vaults * self.constants.mem_3d_tsv_ctrl_area_per_vault
 
       if self.perf and self.sram:
          self.update_using_perf_sram()
@@ -121,7 +126,7 @@ class Chip(Base):
          # byte/s to bit/cycle, 1 byte is 8 bits
          sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
          sram_area_um2 = self.sram_area * 1e6
-         self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
+         self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_constants[self.sram_tech], available_srams=available_srams[self.sram_tech])
          if self.sram_mb:
             self.sram = self.sram_mb * 1e6
          else:
@@ -131,7 +136,7 @@ class Chip(Base):
    def update_using_perf_sram(self) -> None:
       self.sram_mb = self.sram / 1e6
       sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
-      sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, vlsi_params=vlsi_7nm, available_srams=available_srams_7nm)
+      sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, vlsi_params=vlsi_constants[self.sram_tech], available_srams=available_srams[self.sram_tech])
       self.sram_area = sram_area_um2 / 1e6
       self.mac_area = self.perf / 1e12 * self.macs_density
       mac_sram_area = self.sram_area + self.mac_area

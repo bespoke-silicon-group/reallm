@@ -120,6 +120,10 @@ class Package(Base):
             if self.chip.mem_3d_vaults * self.mem_3d.area > self.chip.area:
                 self.invalid_reason = f'Not enough space to place {self.chip.mem_3d_vaults} 3D memory vaults'
                 return False
+            if self.chip.mem_3d_vault_tsvs:
+                if self.chip.mem_3d_vault_tsvs != self.mem_3d.tsvs:
+                    self.invalid_reason = f'Chip has {self.chip.mem_3d_vault_tsvs} TSVs per 3D memory vault, but the memory has {self.mem_3d.tsvs} TSVs per vault'
+                    return False
             self.heatsource_length = max(self.chip.x, self.chip.y) * math.ceil(math.sqrt(self.num_chips))
         if self.num_hbm_stacks > 0:
             # check the physical layout of HBM to see if there is enough space to place it
@@ -148,7 +152,7 @@ class Package(Base):
             if self.total_die_area > self.constants.max_die_area:
                 self.invalid_reason = f'Not enough space to place {self.num_chips} chips, the area is {self.total_die_area} mm2, but the max area is {self.constants.max_die_area} mm2'
                 return False
-            self.heatsource_length = max(self.chip.x, self.chip.y) * math.ceil(math.sqrt(self.num_chips))
+            self.heatsource_length = max(self.chip.x, self.chip.y) * math.ceil(math.sqrt(self.num_chips)) * 1.2
         self.heatsource_width = self.heatsource_length
 
         return True
