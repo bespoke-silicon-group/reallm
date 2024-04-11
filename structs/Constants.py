@@ -31,7 +31,7 @@ class ChipConstants():
 
 @dataclass
 class PackageConstants():
-    max_die_area: float = 1400 # A100 is around 1400mm2
+    max_die_area: float = 1600
     # organic substrate
     os_area_scale_factor: float = 4.0
     os_cost_per_mm2: float = 0.005

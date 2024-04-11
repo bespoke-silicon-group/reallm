@@ -135,7 +135,7 @@ class Package(Base):
             max_num_stacks_per_chip = 2 * math.ceil(chip_long_side / hbm_long_side)
             max_num_stacks = max_num_stacks_per_chip * self.num_chips
             if self.num_hbm_stacks > max_num_stacks:
-                self.invalid_reason = f'Not enough space to place {self.num_hbm_stacks} HBM stacks'
+                self.invalid_reason = f'Not enough space to place {self.num_hbm_stacks} HBM stacks in total chip area of {self.num_chips * self.chip.area} mm2'
                 return False
             elif self.num_hbm_stacks > max_num_stacks / 2:
                 # If place on both sides

@@ -12,6 +12,8 @@ class System(Base):
     server: Server
     model: Model
     allreduce_algo: str = 'ring'
+    hybrid_parallelism: bool = False
+    update_on_init: bool = True
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
     num_servers: Optional[int] = None # number of servers
@@ -49,9 +51,10 @@ class System(Base):
     default_mapping: Optional[Mapping] = None
 
     def update(self) -> None:
-        self.valid = self._hardware_update()
-        if self.valid:
-            self._software_update()
+        if self.update_on_init:
+            self.valid = self._hardware_update()
+            if self.valid:
+                self._software_update()
 
     def get_perf(self, prefill_len, generate_len) -> Performance:
         return Performance(system=self, prefill_len=prefill_len, generate_len=generate_len)
@@ -164,11 +167,20 @@ class System(Base):
 
     def gen_mappings(self, batch: int, min_ctx_len: int) -> list[Mapping]:
         valid_mappings = []
-        for p in range(1, self.model.num_layers + 1):
-            # pipeline parallelism should be a divisor of the number of layers
-            if self.model.num_layers % p != 0:
-                continue
 
+        def get_all_p(num_layers):
+            all_p = []
+            last_layers_per_pipeline = 0
+            for p in range(1, num_layers + 1):
+                layers_per_pipeline = math.ceil(num_layers / p)
+                if layers_per_pipeline == last_layers_per_pipeline:
+                    continue
+                else:
+                    last_layers_per_pipeline = layers_per_pipeline
+                    all_p.append(p)
+            return all_p
+
+        for p in get_all_p(self.model.num_layers):
             # multiple servers per pipeline stage, t_srv needs to be integer 
             if self.num_servers >= p:
                 t_srv = self.num_servers // p # int
@@ -193,7 +205,38 @@ class System(Base):
                 # iterate through all possible micro batch sizes
                 micro_batch = 1
                 while micro_batch <= batch:
-                    valid_mappings.append(Mapping(t=t_chip, p=p, micro_batch=micro_batch))
+                    if self.hybrid_parallelism:
+                        for num_srv in range(1, self.num_servers + 1):
+                            if self.num_servers % num_srv != 0:
+                                continue
+                            prefill_p = 1
+                            num_sub_systems = self.num_servers // num_srv
+                            sub_batch = batch // num_sub_systems
+                            if sub_batch < 1:
+                                sub_batch = 1
+                            prefill_t_srv = num_srv
+                            prefill_t_pkg = prefill_t_srv * self.server.num_packages
+                            prefill_t_chip = prefill_t_pkg * self.server.package.num_chips
+                            total_used_mem = prefill_t_pkg * self.server.package.total_mem * prefill_p
+                            if total_used_mem < (self.model.model_size_byte + sub_batch * self.eval_len[0] * self.model.kv_cache_size_per_token_byte):
+                                continue
+                            prefill_micro_batch = 1
+                            while prefill_micro_batch <= sub_batch:
+                                valid_mappings.append(Mapping(t=t_chip, p=p, 
+                                                              micro_batch=micro_batch, 
+                                                              prefill_micro_batch=prefill_micro_batch,
+                                                              prefill_batch=sub_batch,
+                                                              prefill_t=prefill_t_chip, 
+                                                              prefill_p=prefill_p,
+                                                              hybrid=True))
+                                prefill_micro_batch *= 2
+                    else:
+                        prefill_micro_batch = 1
+                        while prefill_micro_batch <= micro_batch:
+                            valid_mappings.append(Mapping(t=t_chip, p=p, 
+                                                          micro_batch=micro_batch, 
+                                                          prefill_micro_batch=prefill_micro_batch))
+                            prefill_micro_batch *= 2
                     micro_batch *= 2
 
         return valid_mappings

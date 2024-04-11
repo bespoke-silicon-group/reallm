@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, TYPE_CHECKING, Tuple
 from .Base import Base, TensorShape
 from .Mapping import Mapping
@@ -52,9 +52,42 @@ class Performance(Base):
         """
         self.asplos_version = self.system.asplos_version
         if self.update_on_init:
-            self.prefill_eval()
+            if self.mapping.hybrid:
+                sub_sys = replace(self.system,
+                                  num_servers=self.mapping.prefill_t // self.system.server.num_chips,
+                                  hybrid_parallelism=False,
+                                  update_on_init=False
+                                  )
+                sub_sys_mapping = Mapping(t=self.mapping.prefill_t,
+                                          p=1,
+                                          micro_batch=self.mapping.prefill_micro_batch,
+                                          prefill_micro_batch=self.mapping.prefill_micro_batch)
+                sub_sys_perf = Performance(system=sub_sys, batch=self.mapping.prefill_batch, 
+                                           mapping=sub_sys_mapping, 
+                                           prefill_len=self.prefill_len, 
+                                           generate_len=0,
+                                           update_on_init=False
+                                           )
+                sub_sys_perf.prefill_eval()
+                num_sub_sys = self.batch // self.mapping.prefill_batch
+                self.prefill_latency = sub_sys_perf.prefill_latency
+                self.prefill_throughput = sub_sys_perf.prefill_throughput * num_sub_sys
+                self.prefill_utilization = sub_sys_perf.prefill_utilization
+                self.prefill_core_energy = Energy(fma=sub_sys_perf.prefill_core_energy.fma * num_sub_sys,
+                                                  mem=sub_sys_perf.prefill_core_energy.mem * num_sub_sys,
+                                                  comm=sub_sys_perf.prefill_core_energy.comm * num_sub_sys
+                                                  )
+                self.prefill_power = sub_sys_perf.prefill_power * num_sub_sys
+                self.prefill_bottleneck = sub_sys_perf.prefill_bottleneck
+            else:
+                self.prefill_eval()
+
             self.generate_eval()
-            self.srv_tco = self.generate_srv_tco
+
+            self.srv_tco, self.prefill_tco_per_token, self.generate_tco_per_token = self._get_tco()
+
+            self.prefill_srv_tco = self.srv_tco
+            self.generate_srv_tco = self.srv_tco
             self.tco_per_token = self.generate_tco_per_token
     
     def prefill_eval(self) -> None:
@@ -68,8 +101,6 @@ class Performance(Base):
 
         self.prefill_core_energy = self._get_core_energy('prefill')
         self.prefill_power = self.prefill_core_energy.total / self.prefill_latency + self.system.other_tdp
-
-        self.prefill_srv_tco, self.prefill_tco_per_token = self._get_tco('prefill')
 
         self.prefill_bottleneck = self._get_bottleneck(micro_batch_latency)
         
@@ -128,8 +159,6 @@ class Performance(Base):
         self.generate_core_energy = self._get_core_energy('generate')
         self.generate_power = self.generate_core_energy.total / self.generate_latency + self.system.other_tdp
 
-        self.generate_srv_tco, self.generate_tco_per_token = self._get_tco('generate')
-
         self.generate_bottleneck = self._get_bottleneck(micro_batch_latency)
 
     def _get_bottleneck(self, lat: MicroBatchLatency) -> str:
@@ -149,28 +178,15 @@ class Performance(Base):
         elif t_comp > t_io and t_comp > t_mem:
             return 'Compute'
     
-    def _get_tco(self, stage: str) -> Tuple[TCO, float]:
+    def _get_tco(self) -> Tuple[TCO, float, float]:
         '''
-        Calculate the server TCO of prefill or generate.
+        Calculate the server TCO.
         '''
-        if stage == 'prefill':
-            utilization = self.prefill_utilization
-            srv_power = self.prefill_power / self.system.num_servers
-            throughput = self.prefill_throughput
-        elif stage == 'generate':
-            utilization = self.generate_utilization
-            srv_power = self.generate_power / self.system.num_servers
-            throughput = self.generate_throughput
-
-        # print(f"{stage}: \
-        #         \nFLOPS utilization = {utilization}, \
-        #         \nthrougput = {throughput}, \
-        #         \nmircobatch = {self.mapping.micro_batch}, \
-        #         \ntdp = {self.system.tdp}, \
-        #         \ncore tdp = {self.system.core_tdp}, \
-        #         \nother tdp = {self.system.other_tdp}, \
-        #         \nutil power = {self.system.tdp * utilization}, \
-        #         \nenergy model power = {srv_power * self.system.num_servers}, ")
+        prefill_ratio = self.prefill_latency / (self.prefill_latency + self.generate_latency)
+        generate_ratio = self.generate_latency / (self.prefill_latency + self.generate_latency)
+        utilization = self.generate_utilization * generate_ratio + self.prefill_utilization * prefill_ratio
+        srv_power = (self.generate_power * generate_ratio + self.prefill_power * prefill_ratio) / self.system.num_servers
+        inference_throughput = self.batch / (self.prefill_latency + self.generate_latency)
 
         if self.system.energy_model:
             srv_tco = TCO(server_tdp=srv_power,
@@ -187,9 +203,11 @@ class Performance(Base):
             srv_tco.total = self.srv_tco.fix_part + self.srv_tco.power_part
         srv_life_sec = self.system.server.constants.SrvLife * 365 * 24 * 3600
         tco_per_sec = srv_tco.total * self.system.num_servers / srv_life_sec
-        tco_per_token = tco_per_sec / throughput
+        tco_per_inference = tco_per_sec / inference_throughput
+        tco_per_input_token = tco_per_inference / (self.batch * self.prefill_len)
+        tco_per_output_token = tco_per_inference / (self.batch * self.generate_len)
 
-        return srv_tco, tco_per_token
+        return srv_tco, tco_per_input_token, tco_per_output_token
     
     def _get_core_energy(self, stage: str) -> Energy:
         '''
@@ -500,6 +518,16 @@ class Performance(Base):
         elif algorithm == '3d_ring':
             cbrt_p = math.ceil(p ** (1/3))
             t = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p)
+        elif algorithm == 'local_4d_16':
+            t_local_ar = 8 * alpha + beta * n
+            if p == 16:
+                return t_local_ar
+            else:
+                p_global = math.ceil(p / 16)
+                cbrt_p = math.ceil(p_global ** (1/3))
+                t_global = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p) 
+                t_local_bc = 16 * alpha + beta * n + 2 * math.sqrt(alpha * beta * n)
+                return t_local_ar + t_global + t_local_bc
         else:
             raise ValueError('Invalid algorithm for all-reduce')
         return t
@@ -701,9 +729,10 @@ class MicroBatchLatency(Base):
     def update(self) -> None:
         layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
         layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
-        self.pipeline_stage = (layer_compute + layer_communication) * (self.num_layers / self.p) + self.stage2stage
+        layers_per_stage = math.ceil(self.num_layers / self.p)
+        self.pipeline_stage = (layer_compute + layer_communication) * layers_per_stage + self.stage2stage
         self.total = self.pipeline_stage * self.p
-        self.compute = layer_compute * self.num_layers
+        self.compute = layer_compute * layers_per_stage * self.p
         self.communication = self.total - self.compute
         self.utilization = self.compute / self.total
 
