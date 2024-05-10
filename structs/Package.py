@@ -139,15 +139,15 @@ class Package(Base):
                 return False
             elif self.num_hbm_stacks > max_num_stacks / 2:
                 # If place on both sides
-                num_stacks_per_side = math.ceil(self.num_hbm_stacks / 2)
+                num_stacks_per_side = math.ceil(self.num_hbm_stacks / self.num_chips / 2)
                 chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
                 chip_hbm_short_side = min(self.chip.x, self.chip.y) + 2 * min(self.hbm.x, self.hbm.y)
             else:
                 # If place on one side only
-                num_stacks_per_side = self.num_hbm_stacks
+                num_stacks_per_side = math.ceil(self.num_hbm_stacks / self.num_chips)
                 chip_hbm_long_side = max(chip_long_side, num_stacks_per_side * hbm_long_side)
                 chip_hbm_short_side = min(self.chip.x, self.chip.y) + min(self.hbm.x, self.hbm.y)
-            self.heatsource_length = max(chip_hbm_long_side, chip_hbm_short_side)
+            self.heatsource_length = max(chip_hbm_long_side, chip_hbm_short_side) * math.floor(math.sqrt(self.num_chips)) * 1.2
         else:
             if self.total_die_area > self.constants.max_die_area:
                 self.invalid_reason = f'Not enough space to place {self.num_chips} chips, the area is {self.total_die_area} mm2, but the max area is {self.constants.max_die_area} mm2'

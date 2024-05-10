@@ -115,6 +115,10 @@ class Server(Base):
             c_dcdc += (self.package.num_hbm_stacks * self.package.hbm.tdp / self.package.hbm.vdd) * self.num_packages
         cost_dcdc = self.constants.DCDCCostPerAmp * c_dcdc
         cost_psu = self.tdp * self.constants.PSUCostPerW
+        if cost_dcdc > self.constants.MaxDCDCCost:
+            cost_dcdc = self.constants.MaxDCDCCost
+        if cost_psu > self.constants.MaxPSUCost:
+            cost_psu = self.constants.MaxPSUCost
 
         cost_per_package = self.package.cost
         cost_all_package = cost_per_package * self.num_packages
@@ -144,6 +148,6 @@ class Server(Base):
         self.cost_dcdc = cost_dcdc
         self.cost_psu = cost_psu
         self.cost_system = system_cost
-        
+
         return server_cost
 

@@ -56,13 +56,13 @@ Server:
 # System configuration for each model
 System:
   all:
-   - num_servers: [2, 4, 8]
+   - num_servers: [1, 2, 4, 8]
      eval_len: [[256, 64], [64, 256], [1024, 256], [256, 1024]]
      compute_perf_efficiency: 1.0
      io_bandwidth_efficiency: 1.0
      weight_bandwidth_efficiency: 1.0
      allreduce_algo: '2d_ring'
-     max_batch: 128
+     max_batch: 1024
      # default_mapping:
      #  - t: 64
      #    p: 1

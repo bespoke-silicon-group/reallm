@@ -11,6 +11,8 @@ outputs/
 *.log
 *.csv
 *.pdf
+*.pkl
+*.ini
 ucli.key
 vc_hdrs.h
 .ipynb_checkpoints

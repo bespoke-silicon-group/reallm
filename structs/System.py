@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional, Tuple
 from .Base import Base
 from .Server import Server
@@ -12,7 +12,7 @@ class System(Base):
     server: Server
     model: Model
     allreduce_algo: str = 'ring'
-    hybrid_parallelism: bool = False
+    sub_sys_num_servers: Optional[int] = None # or number of servers in each sub-system
     update_on_init: bool = True
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
@@ -149,8 +149,55 @@ class System(Base):
                 mappings = [mapping]
             else:
                 mappings = self.gen_mappings(batch=batch, min_ctx_len=total_len)
+                if self.sub_sys_num_servers and (self.sub_sys_num_servers < self.num_servers):
+                    if self.num_servers % self.sub_sys_num_servers != 0:
+                        raise ValueError('sub_sys_num_servers should be a divisor of num_servers.')
+                    num_sub_sys = self.num_servers // self.sub_sys_num_servers 
+                    sub_batch = batch // num_sub_sys
+                    if sub_batch >= 1:
+                        sub_sys = replace(self, 
+                                          num_servers=self.sub_sys_num_servers, 
+                                          eval_len=[self.eval_len[0], 1],
+                                          sub_sys_num_servers=None,
+                                          max_ctx_len_batch_1=None, 
+                                          kv_cache_ratio=None,
+                                          update_on_init=False)
+                        sub_sys._hardware_update()
+                        if sub_sys.max_ctx_len_batch_1:
+                            max_sub_ctx_len = sub_sys.max_ctx_len_batch_1 // sub_batch
+                            if max_sub_ctx_len >= self.eval_len[0]:
+                                sub_ctx_len = min(max_sub_ctx_len, total_len)
+                                new_mappings = []
+                                # sub_mappings = sub_sys.gen_mappings(batch=sub_batch, min_ctx_len=sub_ctx_len)
+                                # for sub_mapping in sub_mappings:
+                                #     for mapping in mappings:
+                                #         new_mapping = replace(mapping, 
+                                #                               dynamic=True, 
+                                #                               num_sub_sys=num_sub_sys, 
+                                #                               sub_batch=sub_batch,
+                                #                               sub_micro_batch=sub_mapping.micro_batch,
+                                #                               sub_prefill_micro_batch=sub_mapping.prefill_micro_batch,
+                                #                               sub_t=sub_mapping.t,
+                                #                               sub_p=sub_mapping.p,
+                                #                               sub_ctx_len=sub_ctx_len)
+                                #         new_mappings.append(new_mapping)
+                                for mapping in mappings:
+                                    new_mapping = replace(mapping, 
+                                                          dynamic=True, 
+                                                          num_sub_sys=num_sub_sys, 
+                                                          sub_batch=sub_batch,
+                                                          sub_micro_batch=sub_batch,
+                                                          sub_prefill_micro_batch=sub_batch,
+                                                          sub_t=sub_sys.num_chips,
+                                                          sub_p=1,
+                                                          sub_ctx_len=sub_ctx_len)
+                                    new_mappings.append(new_mapping)
+                                if len(new_mappings) > 0:
+                                    mappings = new_mappings
+
             for mapping in mappings:
-                perf = Performance(system=self, mapping=mapping, batch=batch, prefill_len=prefill_len, generate_len=generate_len)
+                perf = Performance(system=self, mapping=mapping, batch=batch, 
+                                   prefill_len=prefill_len, generate_len=generate_len)
                 if perf.prefill_latency < batch_opt_prefill_lat:
                     batch_opt_prefill_lat = perf.prefill_latency
                     self.batch_opt_prefill_lat[batch] = perf
@@ -205,39 +252,12 @@ class System(Base):
                 # iterate through all possible micro batch sizes
                 micro_batch = 1
                 while micro_batch <= batch:
-                    if self.hybrid_parallelism:
-                        for num_srv in range(1, self.num_servers + 1):
-                            if self.num_servers % num_srv != 0:
-                                continue
-                            prefill_p = 1
-                            num_sub_systems = self.num_servers // num_srv
-                            sub_batch = batch // num_sub_systems
-                            if sub_batch < 1:
-                                sub_batch = 1
-                            prefill_t_srv = num_srv
-                            prefill_t_pkg = prefill_t_srv * self.server.num_packages
-                            prefill_t_chip = prefill_t_pkg * self.server.package.num_chips
-                            total_used_mem = prefill_t_pkg * self.server.package.total_mem * prefill_p
-                            if total_used_mem < (self.model.model_size_byte + sub_batch * self.eval_len[0] * self.model.kv_cache_size_per_token_byte):
-                                continue
-                            prefill_micro_batch = 1
-                            while prefill_micro_batch <= sub_batch:
-                                valid_mappings.append(Mapping(t=t_chip, p=p, 
-                                                              micro_batch=micro_batch, 
-                                                              prefill_micro_batch=prefill_micro_batch,
-                                                              prefill_batch=sub_batch,
-                                                              prefill_t=prefill_t_chip, 
-                                                              prefill_p=prefill_p,
-                                                              hybrid=True))
-                                prefill_micro_batch *= 2
-                    else:
-                        prefill_micro_batch = 1
-                        while prefill_micro_batch <= micro_batch:
-                            valid_mappings.append(Mapping(t=t_chip, p=p, 
-                                                          micro_batch=micro_batch, 
-                                                          prefill_micro_batch=prefill_micro_batch))
-                            prefill_micro_batch *= 2
+                    prefill_micro_batch = 1
+                    while prefill_micro_batch <= micro_batch:
+                        valid_mappings.append(Mapping(t=t_chip, p=p, 
+                                                      micro_batch=micro_batch, 
+                                                      prefill_micro_batch=prefill_micro_batch))
+                        prefill_micro_batch *= 2
                     micro_batch *= 2
-
         return valid_mappings
-
+            

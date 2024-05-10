@@ -2,7 +2,7 @@ Name: cc_3d
 
 Chip:
   area: 100
-  mac_ratio: 0.8
+  mac_ratio: 0.55
   operational_intensity: 256
   # macs_density: # mm2/TOPS
     # - 0.72
@@ -10,13 +10,20 @@ Chip:
     - 0.5
   w_per_tops: # w/TOPS
     - 0.36
-  other_area: #
   other_area: # mm2
     - 10
   core_area_ratio:
     - 0.95
   mem_3d_vaults: [12]
   mem_3d_vault_tsvs: [128]
+  # chip2chip_io: # 200 GB/s per chip per direction
+  #   io_type: 'c2c'
+  #   num: 2
+  #   bandwidth_per_io: 100.0e+9
+  #   area_per_io: 5.0 # ??
+  #   tdp_per_io: 0.25 # ??
+  #   pj_per_byte: 9.36 # GRS is 1.17pj/bit
+  #   init_time: 10.0e-9 # 10 ns
   pkg2pkg_io: # 300 GB/s per chip per direction
     io_type: 'p2p'
     num: 2
@@ -33,7 +40,7 @@ Package:
       config: '128 TSVs'
       simulator: False
       layer_area: 4.0
-      layer_cost: 0.6
+      layer_cost: 0.625
       density: 47757234 # bytes/mm2
       tsv_area: 0.0097
       num_layers: 8
@@ -57,14 +64,16 @@ Server:
 # System configuration for each model
 System:
   all:
-   - num_servers: [2, 4, 8]
+   - num_servers: [1, 2, 4, 8, 16]
      eval_len: [[256, 64], [64, 256], [1024, 256], [256, 1024]]
+  #  - num_servers: [2]
+    #  eval_len: [[64, 256]] 
      compute_perf_efficiency: 1.0
      io_bandwidth_efficiency: 1.0
      weight_bandwidth_efficiency: 1.0
      allreduce_algo: 'local_4d_16'
      max_batch: 128
-     hybrid_parallelism: True
+    #  sub_sys_num_servers: [1]
      # default_mapping:
      #  - t: 16
      #    p: 16

@@ -34,8 +34,8 @@ class Heatsink(Base):
     max_power: Optional[float] = None
 
     # Constants
-    base_width = 0.05 # meter, DOUBLE CHECK THIS
-    base_length = 0.05 # meter
+    base_width = 0.06 # meter, DOUBLE CHECK THIS
+    base_length = 0.06 # meter
     # base_width = 0.04 # meter, need to update this for hetergeneous integration
     # base_length = 0.04 # meter
     max_length = 450.0 * 1e-3 # meter
@@ -274,8 +274,8 @@ input_template = {
    'fin_air_volume'         : 0.009439,   # m^3/s
    'n_of_fins'              : 20.0,
    'base_thickness'         : 5e-3,
-   'base_width'             : 0.05,       # the original is 0.04, updated for A100 GPU
-   'base_length'            : 0.05,
+   'base_width'             : 0.06,       # the original is 0.04, updated for A100 GPU
+   'base_length'            : 0.06,
    'base_thermal_cond'      : 200.0,      # Thermal conductivity, W/(mK)
 
    # TIM and Silicon

@@ -1,6 +1,10 @@
 Model:
   name: 'palm'
+  act: 'swiglu'
   num_layers: 118
   d: 18432
-  num_heads: 48
-  heads_per_kv_cache: 48 
+  d_head: 256
+  d_ff: 73728
+  # num_heads: 48
+  num_heads: 64
+  heads_per_kv_cache: 64

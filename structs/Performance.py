@@ -52,24 +52,32 @@ class Performance(Base):
         """
         self.asplos_version = self.system.asplos_version
         if self.update_on_init:
-            if self.mapping.hybrid:
+            if self.mapping.dynamic:
+                if self.mapping.sub_ctx_len < self.prefill_len + self.generate_len:
+                    sub_generate_len = self.mapping.sub_ctx_len - self.prefill_len
+                else:
+                    sub_generate_len = self.generate_len
                 sub_sys = replace(self.system,
-                                  num_servers=self.mapping.prefill_t // self.system.server.num_chips,
-                                  hybrid_parallelism=False,
+                                  num_servers=self.system.sub_sys_num_servers,
+                                  eval_len = [self.prefill_len, sub_generate_len],
+                                  sub_sys_num_servers=None,
                                   update_on_init=False
                                   )
-                sub_sys_mapping = Mapping(t=self.mapping.prefill_t,
-                                          p=1,
-                                          micro_batch=self.mapping.prefill_micro_batch,
-                                          prefill_micro_batch=self.mapping.prefill_micro_batch)
-                sub_sys_perf = Performance(system=sub_sys, batch=self.mapping.prefill_batch, 
+                sub_sys_mapping = Mapping(t=self.mapping.sub_t,
+                                          p=self.mapping.sub_p,
+                                          micro_batch=self.mapping.sub_micro_batch,
+                                          prefill_micro_batch=self.mapping.sub_prefill_micro_batch,
+                                         dynamic=False)
+                sub_sys_perf = Performance(system=sub_sys, 
+                                           batch=self.mapping.sub_batch,
                                            mapping=sub_sys_mapping, 
                                            prefill_len=self.prefill_len, 
-                                           generate_len=0,
+                                           generate_len=sub_generate_len,
                                            update_on_init=False
                                            )
                 sub_sys_perf.prefill_eval()
-                num_sub_sys = self.batch // self.mapping.prefill_batch
+                sub_sys_perf.generate_eval()
+                num_sub_sys = self.mapping.num_sub_sys
                 self.prefill_latency = sub_sys_perf.prefill_latency
                 self.prefill_throughput = sub_sys_perf.prefill_throughput * num_sub_sys
                 self.prefill_utilization = sub_sys_perf.prefill_utilization
@@ -79,6 +87,9 @@ class Performance(Base):
                                                   )
                 self.prefill_power = sub_sys_perf.prefill_power * num_sub_sys
                 self.prefill_bottleneck = sub_sys_perf.prefill_bottleneck
+
+                self.mapping.dynamic = False
+                # TODO: Add KV all to all latency
             else:
                 self.prefill_eval()
 
@@ -311,6 +322,11 @@ class Performance(Base):
         :return: the latency of one inference, in sec
         """
         d = self.system.model.d
+        num_heads = self.system.model.num_heads
+        d_head = self.system.model.d_head
+        if self.system.model.d_ff is None:
+            self.system.model.d_ff = 4 * d
+        d_ff = self.system.model.d_ff
         t = self.mapping.t
         data_bytes = self.system.model.bytes_per_number
 
@@ -375,8 +391,9 @@ class Performance(Base):
         # all chips get the complete activation of size (activation_row, d)
         # each chip has weight of size (d, 3d/t) --> d rows, 3d/t cols
         # so for each chip, we have (activation_row, d) * (d, 3d/t)
+        d_atten = d_head * num_heads
         A = (activation_row, d)
-        B = (d, math.ceil(3 * d / t))
+        B = (d, math.ceil(3 * d_atten / t))
         atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # attention matmul: Q * K_T, 
@@ -388,11 +405,11 @@ class Performance(Base):
             B = (micro_batch, d / t, micro_batch * 20)
         else:
             if stage == 'prefill':
-                A = (micro_batch, self.prefill_len, math.ceil(d / t))
-                B = (micro_batch, math.ceil(d / t), self.prefill_len)
+                A = (micro_batch, self.prefill_len, math.ceil(d_atten / t))
+                B = (micro_batch, math.ceil(d_atten / t), self.prefill_len)
             else:
-                A = (micro_batch, 1, math.ceil(d / t))
-                B = (micro_batch, math.ceil(d / t), self.prefill_len + self.generate_len / 2)
+                A = (micro_batch, 1, math.ceil(d_atten / t))
+                B = (micro_batch, math.ceil(d_atten / t), self.prefill_len + self.generate_len / 2)
         atten_matmul1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         if t > self.system.model.num_heads:
             # DOUBLE CHECK HERE
@@ -412,10 +429,10 @@ class Performance(Base):
         # generate: (micro_batch, 1, ctx_len) * (micro_batch, ctx_len, d / t)
         if stage == 'prefill':
             A = (micro_batch, self.prefill_len, self.prefill_len)
-            B = (micro_batch, self.prefill_len, math.ceil(d / t))
+            B = (micro_batch, self.prefill_len, math.ceil(d_atten / t))
         else:
             A = (micro_batch, 1, self.prefill_len + self.generate_len / 2)
-            B = (micro_batch, self.prefill_len + self.generate_len / 2, math.ceil(d / t))
+            B = (micro_batch, self.prefill_len + self.generate_len / 2, math.ceil(d_atten / t))
         atten_matmul2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.kv_bw_per_chip)
         # no need for all-reduce even when t > num_heads, since each chip has the complete tensor of score, and part of V, 
         # it is able to compute part of the atten_out O
@@ -424,8 +441,8 @@ class Performance(Base):
         # each chip get the activation of size (activation_row, d/t)
         # each chip has weight of size (d/t, d) --> d/t rows, d cols, 
         # so for each chip, we have (activation_row, d/t) * (d/t, d)
-        A = (activation_row, math.ceil(d / t))
-        B = (math.ceil(d / t), d)
+        A = (activation_row, math.ceil(d_atten / t))
+        B = (math.ceil(d_atten / t), d)
         atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
@@ -446,15 +463,18 @@ class Performance(Base):
         # each chip has weight of size (d, 4d/t) --> d rows, 4d/t cols
         # so for each chip we have (activation_row, d) * (d, 4d/t)
         A = (activation_row, d)
-        B = (d, math.ceil(4 * d / t))
+        B = (d, math.ceil(d_ff / t))
+        if 'glu' in self.system.model.act:
+            A = (2, activation_row, d)
+            B = (2, d, math.ceil(d_ff / t))
         fc1_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # FC 2
         # each chip get the activation of size (activation_row, 4d/t)
         # each chip has weight of size (4d/t, d) --> 4d/t rows, d cols, 
         # each for chip we have (activation_row, 4d/t) * (4d/t, d)
-        A = (activation_row, math.ceil(4 * d / t))
-        B = (math.ceil(4 * d / t), d)
+        A = (activation_row, math.ceil(d_ff / t))
+        B = (math.ceil(d_ff / t), d)
         fc2_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce
@@ -467,7 +487,6 @@ class Performance(Base):
             fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.floor(math.sqrt(t)), collective_links)
         else:
             # Double check this
-            # fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.sqrt(t), collective_links)
             fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes * 4, collective_links, self.system.allreduce_algo)
 
         micro_batch_latency = MicroBatchLatency(self.mapping.p, 
@@ -528,6 +547,36 @@ class Performance(Base):
                 t_global = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p) 
                 t_local_bc = 16 * alpha + beta * n + 2 * math.sqrt(alpha * beta * n)
                 return t_local_ar + t_global + t_local_bc
+        elif algorithm == 'local_2d_16':
+            t_local_ar = 6 * (2 * alpha + beta * n / 4)
+            if p == 16:
+                return t_local_ar
+            else:
+                p_global = math.ceil(p / 16)
+                cbrt_p = math.ceil(p_global ** (1/3))
+                t_global = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p) 
+                t_local_bc = 16 * alpha + beta * n + 2 * math.sqrt(alpha * beta * n)
+                return t_local_ar + t_global + t_local_bc
+        elif algorithm == 'local_ring_16':
+            t_local_ar = 30 * alpha + 1.875 * beta * n
+            if p == 16:
+                return t_local_ar
+            else:
+                p_global = math.ceil(p / 16)
+                cbrt_p = math.ceil(p_global ** (1/3))
+                t_global = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p) 
+                t_local_bc = 16 * alpha + beta * n + 2 * math.sqrt(alpha * beta * n)
+                return t_local_ar + t_global + t_local_bc
+        elif algorithm == 'local_ring_8':
+            t_local_ar = 14 * alpha + 1.75 * beta * n
+            if p == 8:
+                return t_local_ar
+            else:
+                p_global = math.ceil(p / 8)
+                cbrt_p = math.ceil(p_global ** (1/3))
+                t_global = 2 * (cbrt_p - 1) * (3 * alpha + beta * n / cbrt_p) 
+                t_local_bc = 16 * alpha + beta * n + 2 * math.sqrt(alpha * beta * n)
+                return t_local_ar + t_global + t_local_bc
         else:
             raise ValueError('Invalid algorithm for all-reduce')
         return t
@@ -580,7 +629,6 @@ class MatmulLatency(Base):
     weight_bw: int
     data_bytes: int = 2
     # data_flow: str = 'WS' # weight stationary
-    data_flow: str = 'simple'
 
     # derived metrics
     I: Optional[int] = None
@@ -608,6 +656,8 @@ class MatmulLatency(Base):
     time: Optional[float] = None
 
     def update(self) -> None:
+        self.dataflow = self.chip.dataflow
+
         assert len(self.A) == len(self.B)
         assert len(self.A) >= 2
         assert self.A[-1] == self.B[-2]
@@ -618,7 +668,7 @@ class MatmulLatency(Base):
             stacks = math.prod(self.A[:-2])
         else:
             stacks = 1
-        if self.data_flow == 'WS':
+        if self.dataflow == 'WS':
             if stacks > self.chip.num_sa:
                 stacks_per_core = math.ceil(stacks / self.chip.num_sa)
                 self.K_per_core = self.K
@@ -639,7 +689,7 @@ class MatmulLatency(Base):
             self.B_shape = (stacks_per_core, self.J_hat, self.K_hat, self.J_bar, self.K_bar)
             self.O_shape = (stacks_per_core, self.I_hat, self.K_hat, self.I_bar, self.K_bar)
 
-            self.block_ldst_time = (self.J_bar * self.K_bar) / self.weight_bw
+            self.block_ldst_time = (self.J_bar * self.K_bar) / (self.weight_bw / self.chip.num_sa)
             self.block_comp_time = math.ceil(max(2 * self.chip.sa_width + self.I_bar, 2 * self.I_bar) / 2) / self.chip.freq
             max_block_time = max(self.block_ldst_time, self.block_comp_time)
 
@@ -647,7 +697,7 @@ class MatmulLatency(Base):
             
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.utilization = self.num_ops / (self.time * self.chip.perf)
-        elif self.data_flow == 'simple':
+        elif self.dataflow == 'simple':
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.block_comp_time = self.num_ops / (self.chip.perf * self.chip.compute_perf_efficiency)
             self.block_ldst_time = stacks * (self.J * self.K) * self.data_bytes / self.weight_bw

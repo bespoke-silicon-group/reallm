@@ -51,8 +51,6 @@ class HBM(Memory):
 @dataclass
 class Memory_3D_Vault(Memory):
     tsvs: Optional[int] = None
-    bit_rate: Optional[int] = None
-    pj_per_bit: Optional[float] = None
     layer_bytes: Optional[int] = None
     layer_area: Optional[float] = None
     layer_cost: Optional[float] = None
@@ -60,6 +58,8 @@ class Memory_3D_Vault(Memory):
 
     density: Optional[int] =  None # in Byte/mm2
     tsv_area: Optional[float] = None
+    bit_rate: Optional[int] = 9.2e9 # in bit/sec
+    pj_per_bit: Optional[float] = 3.0 # in pJ/bit
 
     vdd: float = 1.2 # in volt
 

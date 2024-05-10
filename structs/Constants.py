@@ -57,6 +57,7 @@ class ServerConstants():
     DCDCCostPerAmp = 0.33     # $/amp
     DCDCMaxCurrent = 30.0     # Amps
     DCDCEfficiency = 0.95     # 5% loss
+    MaxDCDCCost = 300.0       # $
     FanPower = 7.4            # W/each
     FanCost = 15.0
     APPPower = 50.0           # W (Application Processor + Srv DRAM), on average
@@ -65,6 +66,7 @@ class ServerConstants():
     PSUCostPerW = 0.13        # $/W
     PSUEfficiency = 0.95      # 5% loss
     PSUOutputVoltage = 12.0
+    MaxPSUCost = 100.0        # $
     # Chassis
     ChassisCost = 30.0        # $
     # Ethernet
@@ -74,7 +76,7 @@ class ServerConstants():
     SrvLife = 1.5             # years
     SrvMaxPower = 2000.0      # W
     LaneAreaMin = 100.0       # mm2
-    LaneAreaMax = 6000.0      # mm2
+    LaneAreaMax = 9000.0      # mm2
 
 @dataclass
 class TCOConstants():

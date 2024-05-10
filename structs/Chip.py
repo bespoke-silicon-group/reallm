@@ -13,6 +13,7 @@ class Chip(Base):
    chip_id: int | str
    pkg2pkg_io: IO  # I/Os to the other package
    chip2chip_io: Optional[IO] = None # I/Os to the other chips in the same package
+   dataflow: str = 'simple' # dataflow type, 'simple or 'WS'
 
    # To define a chip, you should either give the perf, sram and bandwidth, or area and mac_ratio and operational intensity
    perf: Optional[float] = None # flops per sec
