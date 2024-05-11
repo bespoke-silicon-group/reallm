@@ -1,0 +1,59 @@
+Name: tpuv5e
+# https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v5e
+
+Chip:
+  chip_id: 'tpuv5e'
+  perf: # 197 TOPS
+    - 197.0e+12
+  sram: # 300 MB ??
+    - 300.0e+6
+  sram_bw: # 2 TB/s ??
+    - 2.0e+12
+  macs_density: # mm2/TOPS
+    - 0.72
+  other_area: # mm2
+    - 100
+  core_area_ratio:
+    - 0.95
+  hbm_channels: 16
+  pkg2pkg_io: # 51.2 TB/s all-reduce bandwidth per Pod, 204 GB/s per chip
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 102.0e+9
+    area_per_io: 5.0 # ??
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+
+Package:
+  num_chips: 1
+  hbm:
+    # HBM2, 8 channels, 8 GB, 819/2 = 409.5 GB/s
+    - config: 'TPUv5e_HBM2'
+      simulator: False
+      channel_bytes: 1073741824 # 1 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 3435134976 # to make the whole stack 409.5 GB/s
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 4
+  package_max_power_factor: 100.0
+  custom_max_power: 100000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 102.0e+9
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+  
+
+# System configuration for each model
+System:
+  all:
+   - num_servers: 16
+     eval_len: [[20, 8], [60, 20], [128, 8], [256, 64], [64, 256]]
+     compute_perf_efficiency: 1.0
+     io_bandwidth_efficiency: 1.0
+     weight_bandwidth_efficiency: 1.0
+

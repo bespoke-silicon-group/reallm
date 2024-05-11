@@ -1,0 +1,69 @@
+Name: prefill_io_explore
+# https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v5p
+
+Chip:
+  chip_id: 'tpuv5p'
+  perf: # 459 TOPS
+    - 459.0e+12
+  sram: # 300 MB ??
+    - 300.0e+6
+  sram_bw: # 2 TB/s ??
+    - 2.0e+12
+  macs_density: # mm2/TOPS
+    - 0.72
+  other_area: # mm2
+    - 70
+  core_area_ratio:
+    - 0.95
+  hbm_channels: 48
+  pkg2pkg_io: # 300 GB/s per chip per direction
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    area_per_io: 5.0 # ??
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+
+Package:
+  num_chips: 1
+  hbm:
+    # HBM2e, 8 channels, 2 GB/channel, 2765/6 = 460.8 GB/s
+    - config: 'TPUv5p_HBM2e'
+      simulator: False
+      channel_bytes: 2147483648 # 2 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 3865470566 # to make the whole stack 460.8 GB/s
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 2
+  package_max_power_factor: 100.0
+  custom_max_power: 100000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+  
+
+# System configuration for each model
+System:
+  all:
+   - num_servers: [1, 2, 4, 8, 16, 32]
+  #  - num_servers: [2, 4, 6, 8, 10, 12, 14, 16]
+     eval_len: [[256, 64]]
+     compute_perf_efficiency: 1.0
+     io_bandwidth_efficiency: 1.0
+     weight_bandwidth_efficiency: 1.0
+     allreduce_algo: '2d_ring'
+    #  default_mapping:
+    #   - t: 8
+    #     p: 1
+    #     micro_batch: 0
+    #     prefill_micro_batch: 0
+
+

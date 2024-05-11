@@ -1,0 +1,41 @@
+Name: hbm3e_typical
+
+Chip:
+  macs_density: # mm2/TOPS
+    - 0.72
+  core_area_ratio:
+    - 0.6
+  area: [100, 200, 400, 800]
+  mac_ratio:  [0.1, 0.3, 0.5, 0.7, 0.9]
+  operational_intensity: [64]
+  hbm_channels: [8, 16, 32, 48, 64] # 1, 2, 4, 6, 8 stacks
+  pkg2pkg_io:
+    io_type: 'p2p'
+    num: 16
+    bandwidth_per_io: 12500000000
+    area_per_io: 0.3
+    tdp_per_io: 0.125
+
+Package:
+  num_chips: 1
+  hbm:
+    config: 'HBM3e'
+    simulator: False
+    channel_bytes: 3221225472 # 3 GB or 24 Gb
+    channel_width: 128
+    num_channels: 8
+    bit_rate: 9878424780 # 9.2 Gb/s
+    bandwidth_efficiency: 0.95
+    stack_cost: 192
+    pj_per_byte: 20.0
+
+Server:
+  packages_per_lane: [1, 2, 3, 4, 5, 6, 7, 8]
+  # num_lanes: [2, 4]
+  package_max_power_factor: 100.0
+  custom_max_power: 6400
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 12500000000
+

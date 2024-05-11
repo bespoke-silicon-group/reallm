@@ -1,0 +1,83 @@
+Name: iccad
+# iccad exploration
+
+Chip:
+  # area: [200]
+  # mac_ratio:  [0.20, 0.24, 0.28, 0.32, 0.40, 0.50, 0.6, 0.7]
+  # operational_intensity: [64.0]
+  # macs_density: # mm2/TOPS
+  #   - 0.72
+  # w_per_tops: # w/TOPS
+  #   - 0.36
+  # core_area_ratio:
+  #   - 0.8
+  # hbm_channels: [8]
+
+  # perf: [50.0e+12, 100.0e+12, 200.0e+12, 300.0e+12, 400.0e+12,  500.0e+12]
+  perf: [200.0e+12, 400.0e+12]
+  sram: # 300 MB ??
+    - 100.0e+6
+  sram_bw: # 2 TB/s ??
+    - 1.0e+12
+  macs_density: # mm2/TOPS
+    - 0.5
+  w_per_tops: # w/TOPS
+    - 0.36
+  other_area: # mm2
+    - 30
+  core_area_ratio:
+    - 0.95
+  hbm_channels: [16, 32]
+
+  pkg2pkg_io: # 300 GB/s per chip per direction
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    area_per_io: 5.0 # ??
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+
+Package:
+  num_chips: [2, 8]
+  hbm:
+    # HBM3e, 8 layers, 24 GB, 1178 GB/s
+    - config: 'HBM3E'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 2
+  package_max_power_factor: 100.0
+  custom_max_power: 100000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+  
+
+# System configuration for each model
+System:
+  all:
+   - num_servers: [1, 2, 4, 8]
+     eval_len: [[256, 64], [64, 256]]
+     compute_perf_efficiency: 1.0
+     io_bandwidth_efficiency: 1.0
+     weight_bandwidth_efficiency: 1.0
+     allreduce_algo: '3d_ring'
+    #  default_mapping:
+    #   - t: 64
+    #     p: 1
+    #     micro_batch: 0
+    #     prefill_micro_batch: 0
+
+

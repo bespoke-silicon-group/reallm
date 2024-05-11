@@ -1,0 +1,132 @@
+Name: hbm_bw_explore
+# Based on tpuv5p
+
+Chip:
+  perf: # 459 TOPS
+    - 459.0e+12
+  sram: # 300 MB ??
+    - 300.0e+6
+  sram_bw: # 2 TB/s ??
+    - 2.0e+12
+  macs_density: # mm2/TOPS
+    - 0.72
+  other_area: # mm2
+    - 70
+  core_area_ratio:
+    - 0.95
+  hbm_channels: 48
+  pkg2pkg_io: # 300 GB/s per chip per direction
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    area_per_io: 5.0 # ??
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+
+Package:
+  num_chips: 1
+  custom_max_power_density: 100.0
+  hbm:
+    # HBM3e, 8 layers, 24 GB, 1178 GB/s
+    - config: '1.1 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '1.7 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 192
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '2.8 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 320
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '4.6 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 512
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '6.9 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 768
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '9.2 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 1024
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    - config: '13.8 TB/s HBM'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 1536
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+    # - config: '18.4 TB/s HBM'
+    #   simulator: False
+    #   channel_bytes: 3221225472 # 3 GB or 24 Gb
+    #   channel_width: 2048
+    #   num_channels: 8
+    #   bit_rate: 9878424780 # 9.2 Gb/s
+    #   stack_cost: 120
+    #   pj_per_byte: 24 # 3 pJ/bit
+    # - config: '36.8 TB/s HBM'
+    #   simulator: False
+    #   channel_bytes: 3221225472 # 3 GB or 24 Gb
+    #   channel_width: 4096
+    #   num_channels: 8
+    #   bit_rate: 9878424780 # 9.2 Gb/s
+    #   stack_cost: 120
+    #   pj_per_byte: 24 # 3 pJ/bit
+
+Server:
+  packages_per_lane: 1
+  num_lanes: 1
+  package_max_power_factor: 100.0
+  custom_max_power: 100000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 150.0e+9
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+  
+# System configuration for each model
+System:
+  all:
+   - num_servers: [16]
+     eval_len: [[64, 256]]
+     compute_perf_efficiency: 1.0
+     io_bandwidth_efficiency: 1.0
+     weight_bandwidth_efficiency: 1.0
+     allreduce_algo: '2d_ring'
+     # default_mapping:
+     #  - t: 8
+     #    p: 1
+     #    micro_batch: 0
+     #    prefill_micro_batch: 0
+

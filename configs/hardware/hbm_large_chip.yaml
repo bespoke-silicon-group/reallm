@@ -1,0 +1,93 @@
+Name: hbm_large_chip
+
+Chip:
+  # perf: # 138 TOPS
+  #   - 138000000000000
+  # sram: # 144 MB
+  #   - 144000000
+  # sram_bw: # 2 TB/s
+  #   - 2000000000000
+  # macs_density: # mm2/TOPS
+  #   - 1.0
+  macs_density: # mm2/TOPS
+    - 0.72
+  core_area_ratio:
+    - 0.6
+  area: [800]
+  mac_ratio:  [0.5, 0.6, 0.7, 0.8, 0.9]
+  operational_intensity: [8, 16, 32, 48, 64]
+  hbm_channels: [8, 16, 32] # 1, 2, 4 stacks
+  pkg2pkg_io:
+    io_type: 'p2p'
+    num: 16
+    bandwidth_per_io: 12500000000
+    area_per_io: 0.3
+    tdp_per_io: 0.125
+
+Package:
+  num_chips: 1
+  hbm:
+    # HBM1, 4 layers, 4 GB, 128 GB/s
+    - config: 'HBM_4GB'
+      simulator: False
+      channel_bytes: 536870912 # 512 MB or 4 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 1073741824 # 1 Gb/s
+      bandwidth_efficiency: 0.8
+      stack_cost: 50 
+      pj_per_byte: 35
+    # HBM2, 8 layers, 8 GB, 256 GB/s
+    - config: 'HBM2_8GB'
+      simulator: False
+      channel_bytes: 1073741824 # 1 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 2147483648 # 2 Gb/s
+      bandwidth_efficiency: 0.8
+      # cost_per_gb: 7.5 # HBM2, $120/16GB
+      stack_cost: 60 
+    # HBM2e, 8 layers, 16 GB, 410 GB/s
+    - config: 'HBM2e_16GB'
+      simulator: False
+      channel_bytes: 2147483648 # 2 GB or 16 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 3435973836 # 3.2 Gb/s
+      bandwidth_efficiency: 0.8
+      # cost_per_gb: 6
+      stack_cost: 72
+      pj_per_byte: 19.5
+    # HBM3, 8 layers, 16 GB, 819 GB/s
+    - config: 'HBM3_16GB'
+      simulator: False
+      channel_bytes: 2147483648 # 2 GB or 16 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 6871947673 # 6.4 Gb/s
+      bandwidth_efficiency: 0.8
+      # cost_per_gb: 7.2
+      stack_cost: 86.4
+      pj_per_byte: 10.0
+    # HBM3e, 8 layers, 24 GB, 1178 GB/s
+    - config: 'HBM3e_24GB'
+      simulator: False
+      channel_bytes: 3221225472 # 3 GB or 24 Gb
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 9878424780 # 9.2 Gb/s
+      bandwidth_efficiency: 0.8
+      # cost_per_gb: 8.64
+      stack_cost: 103.68
+      pj_per_byte: 7.5
+
+Server:
+  packages_per_lane: [1, 2, 4, 8, 16]
+  num_lanes: [2, 4]
+  package_max_power_factor: 100.0
+  custom_max_power: 4000
+  io:
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 12500000000
+
