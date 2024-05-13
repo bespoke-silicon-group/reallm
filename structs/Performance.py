@@ -487,7 +487,7 @@ class Performance(Base):
             fc_communication_latency = self._get_ring_all_reduce_latency(t, activation_size * data_bytes * 4 / math.floor(math.sqrt(t)), collective_links)
         else:
             # Double check this
-            fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes * 4, collective_links, self.system.allreduce_algo)
+            fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes, collective_links, self.system.allreduce_algo)
 
         micro_batch_latency = MicroBatchLatency(self.mapping.p, 
                                                 self.system.model.num_layers, 
