@@ -63,6 +63,13 @@ endef
 $(foreach hardware,$(HARDWARE), \
   $(eval $(call SW_ALL_GEN)))
 
+# Test
+test:
+	@make test_hw.clean
+	@make test_hw.hw
+	@make test_hw.sw.gpt3
+	$(VENV_PYTHON3) tests/compare.py --hardware test_hw --model gpt3
+
 # Clean all
 clean:
 	rm -rf $(OUTPUT_DIR)
