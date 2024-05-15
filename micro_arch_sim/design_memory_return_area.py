@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import math
-from typing import Optional, List
-from sram import SRAM, MEMORY
-from vlsi import VLSI
+from typing import List
+from micro_arch_sim.sram import SRAM, MEMORY
+from micro_arch_sim.vlsi import VLSI
 
-from magic_numbers import available_srams_12nm, available_srams_7nm, vlsi_12nm, vlsi_7nm
+from vlsi_numbers.magic_numbers import available_srams_12nm, available_srams_7nm, vlsi_12nm, vlsi_7nm
 
 
 # return area in um2

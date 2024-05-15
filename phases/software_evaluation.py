@@ -14,22 +14,15 @@ def system_eval(config: dict, verbose: bool = False) -> Optional[System]:
             print(f'Invalid system design: {system.invalid_reason}')
         return None
 
-if __name__ == '__main__': 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str)
-    parser.add_argument('--hardware', type=str)
-    parser.add_argument('--hw-config', type=str)
-    parser.add_argument('--results-dir', type=str)
-    parser.add_argument('--verbose', action='store_true')
-    args = parser.parse_args()
+def software_evaluation(model_cfg_file: str, hw_cfg_file: str, hw_pickle: str, results_dir: str, verbose: bool = False):
 
-    with open(args.model, 'rb') as f:
+    with open(model_cfg_file, 'rb') as f:
         model_config = yaml.safe_load(f)
         model_name = model_config['Model']['name']
         model = Model(**model_config['Model'])
     print('Generated design points for:', model_name)
 
-    hw_config = yaml.safe_load(open(args.hw_config, 'r'))
+    hw_config = yaml.safe_load(open(hw_cfg_file, 'r'))
     if 'System' in hw_config:
         if model_name in hw_config['System']:
             sys_config = hw_config['System'][model_name][0]
@@ -40,13 +33,6 @@ if __name__ == '__main__':
     else:
         sys_config = dict()
         sys_config['num_servers'] = []
-        # # For GPT-3 exploration, set number of servers
-        # if 'hbm' in args.hardware:
-        #     max_num_servers = 64 # reduce search space for HBM
-        # elif 'dram_3d' in args.hardware:
-        #     max_num_servers = 16 # reduce search space for 3D DRAM
-        # else:
-        #     max_num_servers = model.num_layers
         max_num_servers = model.num_layers
         num_servers = 1
         while num_servers <= max_num_servers:
@@ -58,13 +44,13 @@ if __name__ == '__main__':
     all_configs = expand_dict(sys_config)
 
     system_eval_args = []
-    with open(args.hardware, 'rb') as f:
+    with open(hw_pickle, 'rb') as f:
         servers = pickle.load(f)
         for srv in servers:
             for cfg in all_configs:
                 config = cfg.copy()
                 config['server'] = srv
-                system_eval_args.append((config, args.verbose))
+                system_eval_args.append((config, verbose))
 
     start_time = time.time()
     all_systems = []
@@ -76,6 +62,20 @@ if __name__ == '__main__':
     all_systems = [sys for sys in all_systems if sys is not None]
     elapsed_time = time.time() - start_time
 
-    with open(args.results_dir+'/'+model.name+'.pkl', 'wb') as f:
+    hardware_name = hw_cfg_file.split('/')[-1].split('.')[0]
+    with open(f'{results_dir}/{hardware_name}/{model.name}.pkl', 'wb') as f:
       pickle.dump(all_systems, f)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
+
+
+if __name__ == '__main__': 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str)
+    parser.add_argument('--hardware', type=str)
+    parser.add_argument('--hw-config', type=str)
+    parser.add_argument('--results-dir', type=str, default='outputs')
+    parser.add_argument('--verbose', action='store_true')
+    args = parser.parse_args()
+    software_evaluation(args.model, args.hw_config, args.hardware, args.results_dir, args.verbose)
+
+    

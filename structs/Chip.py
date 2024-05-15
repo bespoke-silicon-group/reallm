@@ -6,7 +6,7 @@ from .Base import Base
 from .IO import IO
 from micro_arch_sim.design_memory import design_memory
 from micro_arch_sim.design_memory_return_area import design_memory_return_area
-from micro_arch_sim.magic_numbers import available_srams, vlsi_constants
+from vlsi_numbers.magic_numbers import available_srams, vlsi_constants
 
 @dataclass
 class Chip(Base):

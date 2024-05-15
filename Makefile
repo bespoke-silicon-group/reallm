@@ -1,6 +1,6 @@
 include Makefile.pyenv
 
-export MAGIC_NUMBERS_PATH = $(abspath ./chiplet_cloud_simulator_vlsi_numbers)
+export MAGIC_NUMBERS_PATH = $(abspath ./vlsi_numbers)
 export MICRO_ARCH_PATH = $(abspath ./micro_arch_sim)
 export STRUCTS_PATH = $(abspath ./structs)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
@@ -26,9 +26,9 @@ $(hardware).hw: $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
 $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl: $(HARDWARE_CONFIG_DIR)/$(hardware).yaml | $(OUTPUT_DIR) pyenv_exists
 	@echo "Running hardware exploration for $(hardware)"
 	@if [ "$(VERBOSE)" = "true" ]; then \
-		$(VENV_PYTHON3) hardware_exploration.py --config $$< --results-dir $(OUTPUT_DIR)/$(hardware) --verbose; \
+		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --results-dir $(OUTPUT_DIR) --verbose; \
 	else \
-		$(VENV_PYTHON3) hardware_exploration.py --config $$< --results-dir $(OUTPUT_DIR)/$(hardware); \
+		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --results-dir $(OUTPUT_DIR); \
 	fi
 $(hardware).hw.clean:
 	rm -f $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
@@ -44,9 +44,9 @@ define SW_GEN
 $(hardware).sw.$(model): $(OUTPUT_DIR)/$(hardware)/$(model).pkl | pyenv_exists
 $(OUTPUT_DIR)/$(hardware)/$(model).pkl: $(MODELS_CONFIG_DIR)/$(model).yaml $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
 	@if [ "$(VERBOSE)" = "true" ]; then \
-		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR)/$(hardware) --verbose; \
+		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR) --verbose; \
 	else \
-		$(VENV_PYTHON3) software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR)/$(hardware); \
+		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR); \
 	fi
 $(hardware).sw.$(model).clean:
 	rm -f $(OUTPUT_DIR)/$(hardware)/$(model).pkl
@@ -66,8 +66,7 @@ $(foreach hardware,$(HARDWARE), \
 # Test
 test:
 	@make test_hw.clean
-	@make test_hw.hw
-	@make test_hw.sw.gpt3
+	$(VENV_PYTHON3) main.py -hw $(HARDWARE_CONFIG_DIR)/test_hw.yaml -m $(MODELS_CONFIG_DIR)/gpt3.yaml
 	$(VENV_PYTHON3) tests/compare.py --hardware test_hw --model gpt3
 
 # Clean all
