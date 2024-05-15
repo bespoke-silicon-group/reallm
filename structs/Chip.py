@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 from typing import Optional
-from .Constants import ChipConstants, ChipConstants7nm
+from .Constants import ChipConstants
 from .Base import Base
 from .IO import IO
 from micro_arch_sim.design_memory import design_memory
@@ -10,10 +10,17 @@ from vlsi_numbers.magic_numbers import available_srams, vlsi_constants
 
 @dataclass
 class Chip(Base):
+   constants: ChipConstants
+
    chip_id: int | str
+   tech: str # technology node
+   dataflow: str # dataflow type, 'simple or 'WS'
    pkg2pkg_io: IO  # I/Os to the other package
+   freq: float = 1e9 # Hz
+   bytes_per_word: int = 2 # bfloat or fp16
    chip2chip_io: Optional[IO] = None # I/Os to the other chips in the same package
-   dataflow: str = 'simple' # dataflow type, 'simple or 'WS'
+   sram_tech: Optional[str] = None # SRAM technology node
+   thermal_eval: bool = True # whether to evaluate thermal
 
    # To define a chip, you should either give the perf, sram and bandwidth, or area and mac_ratio and operational intensity
    perf: Optional[float] = None # flops per sec
@@ -24,31 +31,23 @@ class Chip(Base):
    mac_ratio: Optional[float] = None # (0, 1.0), mac_area / (sram_area + mac_area)
    operational_intensity: Optional[float] = None # ops per sram read
 
+   other_area: float = 0.0 # chip area except SRAM and compute units
+   core_area_ratio: float = 0.7
+   num_sa: Optional[int] = 1 # number of systolic arrays, now assume it's 1
+   acc_depth: int = int(1e100) # accumulation depth for systolic array, now assume it's infinite
+
    hbm_channels: int = 0 # number of HBM channels, each channel is 128 bit
    mem_3d_vaults: int = 0 # number of 3D memory vaults
    mem_3d_vault_tsvs: Optional[int] = None
 
-   tech: str = '7nm'
-   sram_tech: str = '7nm'
    # MACs density mm2/Tera BF16 ops
-   macs_density: float = 2.65 # data from whole chip implementations
-   # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
-   # TPUv4i: 100mm2 MXU for 138TOPS --> 0.72mm2/TOPS
-   # macs_density: float = 1.0
+   macs_density: Optional[float] = None
    # Power Model, W/Tera BF16 ops
-   w_per_tops: float = 1.3
-   padring_width: float = 0.35
-   core_area_ratio: float = 0.7
-   other_area: float = 0.0 # chip area except SRAM and compute units
-   acc_depth: int = int(1e100) # accumulation depth for systolic array, now assume it's infinite
-   freq: float = 1e9 # Hz
-   bytes_per_word: int = 2 # bfloat or fp16
-   constants: ChipConstants = ChipConstants7nm
+   w_per_tops: Optional[float] = None
 
    valid: Optional[bool] = None
    invalid_reason: Optional[str] = None
 
-   num_sa: Optional[int] = 1 # number of systolic arrays, now assume it's 1
    sa_width: Optional[int] = None # systolic array width, height is the same as width
 
    tdp: Optional[float] = None # Watts
@@ -72,6 +71,13 @@ class Chip(Base):
    vdd: float = 0.8
 
    def update(self) -> None:
+      if self.sram_tech is None:
+         self.sram_tech = self.tech
+      if self.macs_density is None:
+         self.macs_density = self.constants.macs_density
+      if self.w_per_tops is None:
+         self.w_per_tops = self.constants.w_per_tops
+
       if self.chip2chip_io:
          self.io_area = self.pkg2pkg_io.area + self.chip2chip_io.area
       else:
@@ -97,7 +103,7 @@ class Chip(Base):
          if self.check_area():
             self.tdp = self._get_tdp()
             self.power_density = self.tdp / self.area
-            if self.check_thermal():
+            if self.check_thermal() or not self.thermal_eval:
                self.valid = True
                self.cost = self._get_cost()
                self.tops = self.perf / 1e12
@@ -110,7 +116,7 @@ class Chip(Base):
 
    def update_using_area_ratio(self) -> None:
       side = math.sqrt(self.area)
-      core_side = side - self.padring_width
+      core_side = side - self.constants.padring_width
       core_area = core_side * core_side
       mac_sram_area = core_area * self.core_area_ratio - self.io_area - self.other_area
       if mac_sram_area < 0.1:
@@ -144,7 +150,7 @@ class Chip(Base):
       self.mac_ratio = self.mac_area / mac_sram_area
       core_area = (mac_sram_area + self.io_area + self.other_area) / self.core_area_ratio
       core_side = math.sqrt(core_area)
-      side = core_side + self.padring_width
+      side = core_side + self.constants.padring_width
       self.area = side * side
 
    def check_area(self) -> bool:

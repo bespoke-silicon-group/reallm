@@ -5,14 +5,12 @@ from .Base import Base, TensorShape
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
-from .Constants import Joules, EnergyConstants
+from .Constants import EnergyConstants
 import math
-import json
 
 if TYPE_CHECKING:
     from .System import System
     from .Chip import Chip
-    from .Package import Package
 
 @dataclass
 class Performance(Base):
@@ -200,11 +198,13 @@ class Performance(Base):
         inference_throughput = self.batch / (self.prefill_latency + self.generate_latency)
 
         if self.system.energy_model:
-            srv_tco = TCO(server_tdp=srv_power,
+            srv_tco = TCO(constants=self.system.server.tco_constants,
+                          server_tdp=srv_power,
                           server_cost=self.system.server.cost,
                           server_life=self.system.server.constants.SrvLife)
         else:
-            srv_tco = TCO(server_tdp=self.system.server.tdp * utilization,
+            srv_tco = TCO(constants=self.system.server.tco_constants,
+                          server_tdp=self.system.server.tdp * utilization,
                           server_cost=self.system.server.cost,
                           server_life=self.system.server.constants.SrvLife)
         if self.asplos_version:
@@ -232,6 +232,7 @@ class Performance(Base):
         :param stage: the stage of inference, either 'prefill' or 'generate'
         :return: in the form of Energy dataclass
         '''
+        constants = self.system.server.energy_constants
         d_model = self.system.model.d
         n_layers = self.system.model.num_layers
         bytes_per_word = self.system.model.bytes_per_number
@@ -245,8 +246,8 @@ class Performance(Base):
             kvcache_mem_energy = self.system.server.package.mem_3d.pj_per_byte
         else:
             # otherwise, we will use SRAM for weight and DRAM for kv cache
-            weight_mem_energy = EnergyConstants().sram_wgt
-            kvcache_mem_energy = EnergyConstants().sram_wgt
+            weight_mem_energy = constants.sram_wgt
+            kvcache_mem_energy = constants.sram_wgt
 
         num_weights_per_layer = 12 * d_model * d_model
         num_weights_total = n_layers * num_weights_per_layer
@@ -265,8 +266,8 @@ class Performance(Base):
             num_kvcache_per_layer = 2 * d_model * self.prefill_len
             num_kvcache_total = n_layers * num_kvcache_per_layer
 
-            gemm_fma_energy = num_weights_total * self.prefill_len * self.mapping.prefill_micro_batch * EnergyConstants.fma_fp16
-            matmul_fma_energy = num_kvcache_total * self.prefill_len * self.mapping.prefill_micro_batch * EnergyConstants.fma_fp16
+            gemm_fma_energy = num_weights_total * self.prefill_len * self.mapping.prefill_micro_batch * constants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * self.prefill_len * self.mapping.prefill_micro_batch * constants.fma_fp16
 
             # 2 all-reduce per layer
             num_allreduce_per_layer = 2 * d_model * self.prefill_len * self.mapping.prefill_micro_batch * self.mapping.t
@@ -281,14 +282,14 @@ class Performance(Base):
             num_kvcache_per_layer = 2 * d_model * (self.prefill_len + self.generate_len / 2)
             num_kvcache_total = n_layers * num_kvcache_per_layer
 
-            gemm_fma_energy = num_weights_total * 1 * self.mapping.micro_batch * EnergyConstants.fma_fp16
-            matmul_fma_energy = num_kvcache_total * 1 * self.mapping.micro_batch * EnergyConstants.fma_fp16
+            gemm_fma_energy = num_weights_total * 1 * self.mapping.micro_batch * constants.fma_fp16
+            matmul_fma_energy = num_kvcache_total * 1 * self.mapping.micro_batch * constants.fma_fp16
 
             # 2 all-reduce per layer
             num_allreduce_per_layer = 2 * d_model * 1 * self.mapping.micro_batch * self.mapping.t
             num_allreduce_total = n_layers * num_allreduce_per_layer
 
-        acts_energy = num_acts_total * bytes_per_word * EnergyConstants().sram_act
+        acts_energy = num_acts_total * bytes_per_word * constants.sram_act
         kvcache_mem_energy = num_kvcache_total * bytes_per_word * kvcache_mem_energy
 
         mem_energy = weight_mem_energy + acts_energy + kvcache_mem_energy
@@ -803,12 +804,13 @@ class MicroBatchLatency(Base):
 
 @dataclass
 class Energy(Base):
-    fma: Joules
-    mem: Joules
-    comm: Joules
-    other: Joules = 0.0
+    # all in joules
+    fma: float
+    mem: float
+    comm: float
+    other: float = 0.0
 
-    total: Optional[Joules] = None
+    total: Optional[float] = None
 
     def update(self) -> None:
         self.total = self.fma + self.mem + self.comm + self.other

@@ -1,5 +1,6 @@
 import multiprocessing, itertools, copy
 from structs.Base import Base
+from structs.Constants import ChipConstants, PackageConstants, ServerConstants, TCOConstants, EnergyConstants
 from structs.Chip import Chip
 from structs.Package import Package
 from structs.Server import Server
@@ -38,11 +39,12 @@ class ChipConfig(Base):
   def update(self) -> None:
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, verbose: bool = False) -> List[Chip]:
+  def explore(self, constants: ChipConstants, verbose: bool = False) -> List[Chip]:
     chips = []
     chip_id = 0
     for cfg in self.all_configs:
       config = copy.deepcopy(cfg)
+      config['constants'] = constants
       if 'chip_id' not in config:
         config['chip_id'] = chip_id
       if 'pkg2pkg_io' in config:
@@ -77,13 +79,14 @@ class PackageConfig(Base):
     #     self.yaml_config['mem_3d'] = [expand_dict(mem) for mem in self.yaml_config['mem_3d']][0]
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, chips: List[Chip], verbose: bool = False) -> List[Package]:
+  def explore(self, chips: List[Chip], constants: PackageConstants, verbose: bool = False) -> List[Package]:
     pkgs = []
     pkg_id = 0
     for chip in chips:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
         config['chip'] = chip
+        config['constants'] = constants
         if pkg_id not in config:
           config['package_id'] = pkg_id
         if 'mem_3d' in config:
@@ -112,12 +115,17 @@ class ServerConfig(Base):
   def update(self) -> None:
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, pkgs: List[Package], verbose: bool = False) -> List[Server]:
+  def explore(self, pkgs: List[Package], 
+              constants: ServerConstants, tco_constants: TCOConstants, energy_constants: EnergyConstants,
+              verbose: bool = False) -> List[Server]:
     srv_specs = []
     srv_id = 0
     for pkg in pkgs:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
+        config['constants'] = constants
+        config['tco_constants'] = tco_constants
+        config['energy_constants'] = energy_constants
         if 'server_id' not in config:
           config['server_id'] = srv_id
         config['package'] = pkg

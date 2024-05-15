@@ -7,19 +7,21 @@ from .Base import Base
 from .IO import IO
 from .Chip import Chip, dies_per_wafer, get_die_yield
 from .Memory import Memory, HBM, Memory_3D_Vault
-from .Constants import PackageConstants, PackageConstantsCommon
+from .Constants import PackageConstants
 
 @dataclass
 class Package(Base):
-    package_id: int
+    constants: PackageConstants
+
     chip: Chip
-    num_chips: int = 1 # number of chips per package
+    num_chips: int # number of chips per package
+    package_id: int
     mem_3d: Optional[Memory_3D_Vault] = None # memory stacked on the top of the chip, can be SRAM or DRAM
     hbm: Optional[HBM] = None # memory on the side of the chip, usually is HBM
     io: Optional[IO] = None # package to package links
     si: bool = None # whether to use silicon interposer
+    thermal_eval: bool = True # whether to evaluate thermal
 
-    constants: PackageConstants = PackageConstantsCommon
     custom_max_power_density: Optional[float] = None # W/mm2
 
     num_hbm_stacks: int = 0
@@ -94,7 +96,7 @@ class Package(Base):
 
         self._update_dimension()
         if self.check_area():
-            if self.check_thermal():
+            if self.check_thermal() or not self.thermal_eval:
                 self.valid = True
                 self.cost = self._get_cost()
             else:

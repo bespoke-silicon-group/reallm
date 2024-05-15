@@ -6,12 +6,14 @@ export STRUCTS_PATH = $(abspath ./structs)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
 export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH)
 
-HARDWARE := $(subst .yaml,,$(shell ls ./configs/hardware))
-MODELS := $(subst .yaml,,$(shell ls ./configs/models))
+HARDWARE := $(subst .yaml,,$(shell ls ./inputs/hardware/config))
+MODELS := $(subst .yaml,,$(shell ls ./inputs/software/model))
 
-CONFIG_DIR = configs
-HARDWARE_CONFIG_DIR = $(CONFIG_DIR)/hardware
-MODELS_CONFIG_DIR = $(CONFIG_DIR)/models
+INPUT_DIR = inputs
+HARDWARE_INPUT_DIR = $(INPUT_DIR)/hardware/config
+MODELS_INPUT_DIR = $(INPUT_DIR)/software/model
+CONSTANTS = $(INPUT_DIR)/hardware/constant/7nm_default.yaml
+SYS_CONFIG = $(INPUT_DIR)/software/system/sys_default.yaml
 
 VERBOSE ?= false
 
@@ -23,12 +25,12 @@ $(OUTPUT_DIR):
 # Hardware Exploration
 define HW_GEN
 $(hardware).hw: $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
-$(OUTPUT_DIR)/$(hardware)/$(hardware).pkl: $(HARDWARE_CONFIG_DIR)/$(hardware).yaml | $(OUTPUT_DIR) pyenv_exists
+$(OUTPUT_DIR)/$(hardware)/$(hardware).pkl: $(HARDWARE_INPUT_DIR)/$(hardware).yaml | $(OUTPUT_DIR) pyenv_exists
 	@echo "Running hardware exploration for $(hardware)"
 	@if [ "$(VERBOSE)" = "true" ]; then \
-		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --results-dir $(OUTPUT_DIR) --verbose; \
+		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --constants-file $(CONSTANTS) --results-dir $(OUTPUT_DIR) --verbose; \
 	else \
-		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --results-dir $(OUTPUT_DIR); \
+		$(VENV_PYTHON3) phases/hardware_exploration.py --config-file $$< --constants-file $(CONSTANTS) --results-dir $(OUTPUT_DIR); \
 	fi
 $(hardware).hw.clean:
 	rm -f $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
@@ -42,11 +44,11 @@ $(foreach hardware,$(HARDWARE), \
 # Software Evaluation
 define SW_GEN
 $(hardware).sw.$(model): $(OUTPUT_DIR)/$(hardware)/$(model).pkl | pyenv_exists
-$(OUTPUT_DIR)/$(hardware)/$(model).pkl: $(MODELS_CONFIG_DIR)/$(model).yaml $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
+$(OUTPUT_DIR)/$(hardware)/$(model).pkl: $(MODELS_INPUT_DIR)/$(model).yaml $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl
 	@if [ "$(VERBOSE)" = "true" ]; then \
-		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR) --verbose; \
+		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --sys-config $(INPUT_DIR)/software/system/$(hardware).yaml --results-dir $(OUTPUT_DIR) --verbose; \
 	else \
-		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --hw-config $(HARDWARE_CONFIG_DIR)/$(hardware).yaml --results-dir $(OUTPUT_DIR); \
+		$(VENV_PYTHON3) phases/software_evaluation.py --model $$< --hardware $(OUTPUT_DIR)/$(hardware)/$(hardware).pkl --sys-config $(INPUT_DIR)/software/system/$(hardware).yaml --results-dir $(OUTPUT_DIR); \
 	fi
 $(hardware).sw.$(model).clean:
 	rm -f $(OUTPUT_DIR)/$(hardware)/$(model).pkl
@@ -65,9 +67,9 @@ $(foreach hardware,$(HARDWARE), \
 
 # Test
 test:
-	@make test_hw.clean
-	$(VENV_PYTHON3) main.py -hw $(HARDWARE_CONFIG_DIR)/test_hw.yaml -m $(MODELS_CONFIG_DIR)/gpt3.yaml
-	$(VENV_PYTHON3) tests/compare.py --hardware test_hw --model gpt3
+	@make hw_example.clean
+	$(VENV_PYTHON3) main.py -hw $(HARDWARE_INPUT_DIR)/hw_example.yaml -m $(MODELS_INPUT_DIR)/gpt3.yaml -c $(CONSTANTS) -s $(SYS_CONFIG) -o $(OUTPUT_DIR)
+	$(VENV_PYTHON3) tests/compare.py --hardware hw_example --model gpt3
 
 # Clean all
 clean:

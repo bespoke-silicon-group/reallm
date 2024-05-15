@@ -1,4 +1,4 @@
-import argparse, pickle, time, yaml
+import argparse, pickle, time, yaml, os
 import multiprocessing
 from typing import Optional
 from structs.Model import Model
@@ -14,22 +14,21 @@ def system_eval(config: dict, verbose: bool = False) -> Optional[System]:
             print(f'Invalid system design: {system.invalid_reason}')
         return None
 
-def software_evaluation(model_cfg_file: str, hw_cfg_file: str, hw_pickle: str, results_dir: str, verbose: bool = False):
+def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickle: str, results_dir: str, verbose: bool = False):
 
-    with open(model_cfg_file, 'rb') as f:
-        model_config = yaml.safe_load(f)
-        model_name = model_config['Model']['name']
-        model = Model(**model_config['Model'])
+    # with open(model_cfg_file, 'rb') as f:
+    # model_config = yaml.safe_load(f)
+    model_name = model_config['Model']['name']
+    model = Model(**model_config['Model'])
     print('Generated design points for:', model_name)
 
-    hw_config = yaml.safe_load(open(hw_cfg_file, 'r'))
-    if 'System' in hw_config:
-        if model_name in hw_config['System']:
-            sys_config = hw_config['System'][model_name][0]
-        elif 'all' in hw_config['System']:
-            sys_config = hw_config['System']['all'][0]
-        else:
-            raise ValueError(f'No system configuration found for model {model_name}')
+    if sys_config is not None:
+        if 'workload' in sys_config:
+            if 'max_batch' in sys_config['workload']:
+                sys_config['max_batch'] = sys_config['workload']['max_batch']
+            if 'eval_len' in sys_config['workload']:
+                sys_config['eval_len'] = sys_config['workload']['eval_len']
+            sys_config.pop('workload')
     else:
         sys_config = dict()
         sys_config['num_servers'] = []
@@ -62,20 +61,24 @@ def software_evaluation(model_cfg_file: str, hw_cfg_file: str, hw_pickle: str, r
     all_systems = [sys for sys in all_systems if sys is not None]
     elapsed_time = time.time() - start_time
 
-    hardware_name = hw_cfg_file.split('/')[-1].split('.')[0]
+    hardware_name = hw_pickle.split('/')[-1].split('.')[0]
     with open(f'{results_dir}/{hardware_name}/{model.name}.pkl', 'wb') as f:
       pickle.dump(all_systems, f)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
-
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str)
     parser.add_argument('--hardware', type=str)
-    parser.add_argument('--hw-config', type=str)
+    parser.add_argument('--sys-config', type=str)
     parser.add_argument('--results-dir', type=str, default='outputs')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
-    software_evaluation(args.model, args.hw_config, args.hardware, args.results_dir, args.verbose)
+    model_config = yaml.safe_load(open(args.model, 'r'))
+    if os.path.exists(args.sys_config) == False:
+        args.sys_config = 'inputs/software/system/sys_default.yaml'
+        print(f'Warning: System configuration file not found. Using default configuration: {args.sys_config}')
+    sys_config = yaml.safe_load(open(args.sys_config, 'r'))
+    software_evaluation(model_config, sys_config, args.hardware, args.results_dir, args.verbose)
 
     

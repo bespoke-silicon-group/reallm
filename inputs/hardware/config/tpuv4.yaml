@@ -4,22 +4,23 @@ Name: tpuv4
 
 Chip:
   chip_id: 'tpuv4'
-  freq: 1.05e+9
+  tech: '7nm'
   # dataflow: 'WS'
+  dataflow: 'simple' # 'simple' for the roofline model, or 'WS' for weight-stationary
+  freq: 1.05e+9
+  bytes_per_word: 2 # bfloat16 or fp16
+
+  perf: 275.0e+12
+  sram: 300.0e+6
+  sram_bw: 2.0e+12
+
   # num_sa: 8 
-  dataflow: 'simple'
-  perf: # 275 TOPS
-    - 275.0e+12
-  sram: # 300 MB ??
-    - 300.0e+6
-  sram_bw: # 2 TB/s ??
-    - 2.0e+12
-  macs_density: # mm2/TOPS
-    - 0.72
-  other_area: # mm2
-    - 200
-  core_area_ratio:
-    - 0.95
+  num_sa: 1 # number of systolic arrays
+  acc_depth: 1000000000 # accumulation depth for systolic array, now assume it's infinite
+
+  other_area: 200
+  core_area_ratio: 0.95
+
   hbm_channels: 32
   pkg2pkg_io: # 1.1 PB/s all-reduce bandwidth per Pod, 281 GB/s per chip
     io_type: 'p2p'
@@ -43,30 +44,13 @@ Package:
 Server:
   packages_per_lane: 2
   num_lanes: 2
-  package_max_power_factor: 100.0
-  custom_max_power: 100000
+  thermal_eval: False # whether to evaluate the thermal
   io:
     io_type: 's2s'
     num: 2
     bandwidth_per_io: 135.0e+9
     tdp_per_io: 0.25 # ??
     pj_per_byte: 9.36 # GRS is 1.17pj/bit
-  
 
-# System configuration for each model
-System:
-  all:
-   - num_servers: 16
-    #  eval_len: [[20, 8], [60, 20], [128, 8], [256, 64], [64, 256]]
-     eval_len: [[20, 8], [60, 20], [128, 8]]
-     compute_perf_efficiency: 0.7
-     io_bandwidth_efficiency: 0.7
-     weight_bandwidth_efficiency: 0.6
-     allreduce_algo: '2d_ring'
-    #  default_mapping:
-    #   - t: 64
-    #     p: 1
-    #     micro_batch: 0
-    #     prefill_micro_batch: 
 
 

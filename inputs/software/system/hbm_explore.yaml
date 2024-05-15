@@ -1,0 +1,14 @@
+num_servers: 4
+compute_perf_efficiency: 1.0
+io_bandwidth_efficiency: 1.0
+weight_bandwidth_efficiency: 1.0
+allreduce_algo: '2d_ring'
+
+workload:
+  eval_len: [[64, 256]]
+
+default_mapping:
+ - t: 16
+   p: 1
+   micro_batch: 0
+   prefill_micro_batch: 0

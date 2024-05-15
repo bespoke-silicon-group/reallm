@@ -6,17 +6,23 @@ from .IO import IO
 from .Package import Package
 from .Heatsink import Heatsink
 from .TCO import TCO
-from .Constants import ServerConstants, ServerConstantsCommon
+from .Constants import ServerConstants, TCOConstants, EnergyConstants
 
 @dataclass
 class Server(Base):
+    constants: ServerConstants
+    tco_constants: TCOConstants
+    energy_constants: EnergyConstants
+
     server_id: int
     package: Package
     packages_per_lane: int # number of packages per lan
     io: IO # server to server links
     num_lanes: int = 8 # number of lanes
+    thermal_eval: bool = True # whether to evaluate thermal
+
     custom_max_power: Optional[float] = None # custom max server power
-    package_max_power_factor: float = 2.0 # package max power factor, assuming we can have better cooling
+    package_max_power_factor: float = 1.0 # package max power factor, assuming we can have better cooling
 
     num_packages: Optional[int] = None # number of packages per server
     num_chips: Optional[int] = None # number of chips per server
@@ -39,8 +45,6 @@ class Server(Base):
     sram_mb: Optional[float] = None # MByte
     total_mem: Optional[int] = None # sram and dram, Byte
 
-    constants: ServerConstants = ServerConstantsCommon
-
     # for test
     cost_dcdc: float = 0
     cost_psu:  float = 0
@@ -54,7 +58,7 @@ class Server(Base):
                                heatsource_width=self.package.heatsource_width, 
                                packages_per_lane=self.packages_per_lane)
 
-            if self.check_thermal():
+            if self.check_thermal() or not self.thermal_eval:
                 self.valid = True
                 self.perf = self.package.perf * self.num_packages
                 self.sram = self.package.sram * self.num_packages
@@ -62,7 +66,7 @@ class Server(Base):
                 self.core_tdp, self.other_tdp = self._get_tdp()
                 self.tdp = self.core_tdp + self.other_tdp
                 self.cost = self._get_cost()
-                self.tco = TCO(self.tdp, self.cost, self.constants.SrvLife)
+                self.tco = TCO(self.tco_constants, self.tdp, self.cost, self.constants.SrvLife)
                 self.tops = self.perf / 1e12
                 self.sram_mb = self.sram / 1e6
                 self.total_mem = self.sram + self.dram

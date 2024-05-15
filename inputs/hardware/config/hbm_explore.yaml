@@ -2,19 +2,21 @@ Name: hbm_explore
 # Based on tpuv5p
 
 Chip:
-  perf: # 459 TOPS
-    - 459.0e+12
-  sram: # 300 MB ??
-    - 300.0e+6
-  sram_bw: # 2 TB/s ??
-    - 2.0e+12
-  macs_density: # mm2/TOPS
-    - 0.72
-  other_area: # mm2
-    - 70
-  core_area_ratio:
-    - 0.95
+  tech: '7nm'
+  # dataflow: 'WS'
+  dataflow: 'simple' # 'simple' for the roofline model, or 'WS' for weight-stationary
+  freq: 1.0e+9
+  bytes_per_word: 2 # bfloat16 or fp16j
+
+  perf: 459.0e+12 # 459 TOPS
+  sram: 300.0e+6 # 300 MB
+  sram_bw: 2.0e+12 # 2 TB/s
+
+  other_area: 70 # mm2
+  core_area_ratio: 0.95
+
   hbm_channels: 48
+
   pkg2pkg_io: # 300 GB/s per chip per direction
     io_type: 'p2p'
     num: 2
@@ -26,7 +28,7 @@ Chip:
 
 Package:
   num_chips: 1
-  custom_max_power_density: 100.0
+  thermal_eval: False # whether to evaluate the thermal
   hbm:
     # HBM2e, 8 layers, 16 GB, 410 GB/s
     - config: 'HBM2E'
@@ -62,8 +64,7 @@ Package:
 Server:
   packages_per_lane: 2
   num_lanes: 2
-  package_max_power_factor: 100.0
-  custom_max_power: 100000
+  thermal_eval: False # whether to evaluate the thermal
   io:
     io_type: 's2s'
     num: 2
@@ -72,18 +73,3 @@ Server:
     pj_per_byte: 9.36 # GRS is 1.17pj/bit
     init_time: 10.0e-9 # 10 ns
   
-# System configuration for each model
-System:
-  all:
-   - num_servers: 4
-     eval_len: [[64, 256]]
-     compute_perf_efficiency: 1.0
-     io_bandwidth_efficiency: 1.0
-     weight_bandwidth_efficiency: 1.0
-     allreduce_algo: '2d_ring'
-     default_mapping:
-      - t: 16
-        p: 1
-        micro_batch: 0
-        prefill_micro_batch: 0
-
