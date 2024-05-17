@@ -12,18 +12,37 @@ from dataclasses import dataclass
 # Expand dict
 def expand_dict(input_dict:  Dict) -> List[Dict]:
   '''
-  Given a dict, return a list of all combinations of the dict.
+  Given a dict, return a list of all combinations of the dict (full exploration),
+  or a list of combinations of the dict with the associated_explore key as the constraint.
   '''
-  for key in input_dict:
-    if isinstance(input_dict[key], Dict):
-      input_dict[key] = expand_dict(input_dict[key])
-    if not isinstance(input_dict[key], List):
-      input_dict[key] = [input_dict[key]]
+  if 'associated_explore' in input_dict:
+    constraint_key = input_dict['associated_explore']
+    input_dict.pop('associated_explore')
+    all_dicts = []
+    for constraint_val in input_dict[constraint_key]:
+      new_dict = dict()
+      for key in input_dict:
+        if key == constraint_key:
+          new_dict[key] = constraint_val
+        elif isinstance(input_dict[key], Dict):
+          if constraint_val in input_dict[key]:
+            new_dict[key] = input_dict[key][constraint_val]
+          else:
+            new_dict[key] = input_dict[key]
+        else:
+          new_dict[key] = input_dict[key]
+      all_dicts.append(new_dict)
+  else:
+    for key in input_dict:
+      if isinstance(input_dict[key], Dict):
+        input_dict[key] = expand_dict(input_dict[key])
+      if not isinstance(input_dict[key], List):
+        input_dict[key] = [input_dict[key]]
 
-  all_dicts = []
-  keys, values = zip(*input_dict.items())
-  for v in itertools.product(*values):
-    all_dicts.append(dict(zip(keys, v)))
+    all_dicts = []
+    keys, values = zip(*input_dict.items())
+    for v in itertools.product(*values):
+      all_dicts.append(dict(zip(keys, v)))
 
   return all_dicts
 
