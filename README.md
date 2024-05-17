@@ -7,11 +7,11 @@ This methodology not only accurately explores a spectrum of major design trade-o
 
 ## Python Setup
 
-This infrastructure uses a python virtual environment to manage all of the required packages. To create this virtual environment, simply run `make setup`. This will use the system default python3 interpreter to create the virtual environment, however we check to make sure that the version is 3.10.*. If the system python3 version is not 3.10.* then it will throw an error. There are 2 primary ways to fix this: give the makefile the path to a python3.10 interpreter or override the version check. We highly suggest using python3.10 as we cannot ensure the infrastructure is stable on other versions.
+This infrastructure uses a python virtual environment to manage all of the required packages. To create this virtual environment, simply run `make setup`. This will use the system default python3 interpreter to create the virtual environment, however we check to make sure that the version is 3.10.\*. If the system python3 version is not 3.10.\* then it will throw an error. There are 2 primary ways to fix this: give the makefile the path to a python3.10 interpreter or override the version check. We highly suggest using python3.10 as we cannot ensure the infrastructure is stable on other versions.
 
 To specify a different python interpreter, set the SYSTEM_PYTHON3 variable when you run setup (ie. `make setup SYSTEM_PYTHON3=<path to python3.10>`). This only needs to be set during first time setup, you do not need to set SYSTEM_PYTHON3 after.
 
-To override the version check, you can set the SYSTEM_PYTHON3_VERSION variable to 3.* when you run setup (ie. `make setup SYSTEM_PYTHON3_VERSION=3.*`). This only needs to be set during first time setup, you do not need to set SYSTEM_PYTHON3_VERSION after.
+To override the version check, you can set the SYSTEM_PYTHON3_VERSION variable to `3.*` when you run setup (ie. `make setup SYSTEM_PYTHON3_VERSION=3.*`). This only needs to be set during first time setup, you do not need to set SYSTEM_PYTHON3_VERSION after.
 
 NOTE: we do not claim support for python versions other than 3.10. Newer version of python are safer than older. However, when using different versions of python, the package versions might also need to be changed. The packages that we install into the virtual environment are found in "requirements.txt". These packages also have a specified version. If you are using a different version of python and pip cannot resolve the packages, you can try removing the specific versions for the packages by modifying requirements.txt and removing the version for each package.
 
