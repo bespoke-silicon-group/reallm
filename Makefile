@@ -66,7 +66,7 @@ $(foreach hardware,$(HARDWARE), \
   $(eval $(call SW_ALL_GEN)))
 
 # Test
-test:
+test: pyenv_exists
 	@make hw_example.clean
 	$(VENV_PYTHON3) main.py -hw $(HARDWARE_INPUT_DIR)/hw_example.yaml -m $(MODELS_INPUT_DIR)/gpt3.yaml -c $(CONSTANTS) -s $(SYS_CONFIG) -o $(OUTPUT_DIR)
 	$(VENV_PYTHON3) tests/compare.py --hardware hw_example --model gpt3
