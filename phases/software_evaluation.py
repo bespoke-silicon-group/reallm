@@ -4,6 +4,7 @@ from typing import Optional
 from structs.Model import Model
 from structs.System import System
 from structs.HardwareConfig import expand_dict
+from utils.performance_dump import perf_to_csv
 
 def system_eval(config: dict, verbose: bool = False) -> Optional[System]:
     system = System(**config)
@@ -16,8 +17,6 @@ def system_eval(config: dict, verbose: bool = False) -> Optional[System]:
 
 def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickle: str, results_dir: str, verbose: bool = False):
 
-    # with open(model_cfg_file, 'rb') as f:
-    # model_config = yaml.safe_load(f)
     model_name = model_config['Model']['name']
     model = Model(**model_config['Model'])
     print('Generated design points for:', model_name)
@@ -62,8 +61,11 @@ def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickl
     elapsed_time = time.time() - start_time
 
     hardware_name = hw_pickle.split('/')[-1].split('.')[0]
-    with open(f'{results_dir}/{hardware_name}/{model.name}.pkl', 'wb') as f:
+    result_pickle_path = f'{results_dir}/{hardware_name}/{model.name}.pkl'
+    with open(result_pickle_path, 'wb') as f:
       pickle.dump(all_systems, f)
+    csv_path = f'{results_dir}/{hardware_name}/{model.name}.csv' 
+    perf_to_csv(result_pickle_path, csv_path)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
 
 if __name__ == '__main__': 

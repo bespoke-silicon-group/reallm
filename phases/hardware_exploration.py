@@ -1,7 +1,7 @@
 import argparse
 from structs.HardwareConfig import ChipConfig, PackageConfig, ServerConfig
 from structs.Constants import ChipConstants, PackageConstants, ServerConstants, TCOConstants, EnergyConstants
-from utils.utils import to_csv
+from utils.hardware_dump import to_csv
 import pickle
 import yaml
 import os
