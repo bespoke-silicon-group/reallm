@@ -4,7 +4,9 @@ Name: hw_example
 Chip:
   chip_id: 'tpuv5p'
   tech: '7nm'
-  dataflow: 'simple' # 'simple' for the roofline model, or 'WS' for weight-stationary
+  # area_model: 'linear' # 'linear' or 'micro_arch'
+  area_model: 'micro_arch'
+  dataflow: 'roofline' # 'roofline' for the roofline model, or 'WS' for weight-stationary
   freq: 1.0e+9 # frequency, in Hz
   bytes_per_word: 2 # bfloat16 or fp16
   # To define a chip, you should either give the perf, sram and bandwidth, 

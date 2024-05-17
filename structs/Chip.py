@@ -6,7 +6,8 @@ from .Base import Base
 from .IO import IO
 from micro_arch_sim.design_memory import design_memory
 from micro_arch_sim.design_memory_return_area import design_memory_return_area
-from vlsi_numbers.magic_numbers import available_srams, vlsi_constants
+from micro_arch_sim.vlsi_numbers import available_srams, vlsi_constants
+# from micro_arch_sim.magic_numbers import available_srams, vlsi_constants
 
 @dataclass
 class Chip(Base):
@@ -14,13 +15,14 @@ class Chip(Base):
 
    chip_id: int | str
    tech: str # technology node
-   dataflow: str # dataflow type, 'simple or 'WS'
+   dataflow: str # dataflow type, 'roofline' or 'WS'
    pkg2pkg_io: IO  # I/Os to the other package
    freq: float = 1e9 # Hz
    bytes_per_word: int = 2 # bfloat or fp16
    chip2chip_io: Optional[IO] = None # I/Os to the other chips in the same package
    sram_tech: Optional[str] = None # SRAM technology node
    thermal_eval: bool = True # whether to evaluate thermal
+   area_model: str = 'linear' # area model, 'linear' or 'micro_arch'
 
    # To define a chip, you should either give the perf, sram and bandwidth, or area and mac_ratio and operational intensity
    perf: Optional[float] = None # flops per sec
@@ -132,8 +134,13 @@ class Chip(Base):
          self.sram_bw = self.perf / 2 / self.operational_intensity * self.bytes_per_word
          # byte/s to bit/cycle, 1 byte is 8 bits
          sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
-         sram_area_um2 = self.sram_area * 1e6
-         self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, vlsi_params=vlsi_constants[self.sram_tech], available_srams=available_srams[self.sram_tech])
+         if self.area_model == 'linear':
+            self.sram_mb = self.sram_area / self.constants.sram_density
+         else:
+            sram_area_um2 = self.sram_area * 1e6
+            self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, 
+                                         vlsi_params=vlsi_constants[self.sram_tech], 
+                                         available_srams=available_srams[self.sram_tech])
          if self.sram_mb:
             self.sram = self.sram_mb * 1e6
          else:
@@ -143,8 +150,13 @@ class Chip(Base):
    def update_using_perf_sram(self) -> None:
       self.sram_mb = self.sram / 1e6
       sram_bw_bit_per_cycle = math.ceil(self.sram_bw * 8 / self.freq)
-      sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, vlsi_params=vlsi_constants[self.sram_tech], available_srams=available_srams[self.sram_tech])
-      self.sram_area = sram_area_um2 / 1e6
+      if self.area_model == 'linear':
+         self.sram_area = self.sram_mb * self.constants.sram_density
+      else:
+         sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, 
+                                                   vlsi_params=vlsi_constants[self.sram_tech], 
+                                                   available_srams=available_srams[self.sram_tech])
+         self.sram_area = sram_area_um2 / 1e6
       self.mac_area = self.perf / 1e12 * self.macs_density
       mac_sram_area = self.sram_area + self.mac_area
       self.mac_ratio = self.mac_area / mac_sram_area

@@ -17,8 +17,3 @@ class Mapping(Base):
     sub_t: int = 0
     sub_p: int = 0
     sub_ctx_len: int = 0
-
-    # def update(self) -> None:
-    #     if not self.dynamic:
-    #         self.prefill_t = self.t
-    #         self.prefill_p = self.p

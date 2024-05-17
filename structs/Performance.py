@@ -5,7 +5,6 @@ from .Base import Base, TensorShape
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
-from .Constants import EnergyConstants
 import math
 
 if TYPE_CHECKING:
@@ -629,7 +628,6 @@ class MatmulLatency(Base):
     chip: Chip
     weight_bw: int
     data_bytes: int = 2
-    # data_flow: str = 'WS' # weight stationary
 
     # derived metrics
     I: Optional[int] = None
@@ -698,7 +696,7 @@ class MatmulLatency(Base):
             
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.utilization = self.num_ops / (self.time * self.chip.perf)
-        elif self.dataflow == 'simple':
+        elif self.dataflow == 'roofline':
             self.num_ops = stacks * self.I * self.J * self.K * 2
             self.block_comp_time = self.num_ops / (self.chip.perf * self.chip.compute_perf_efficiency)
             self.block_ldst_time = stacks * (self.J * self.K) * self.data_bytes / self.weight_bw

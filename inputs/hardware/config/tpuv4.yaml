@@ -5,8 +5,8 @@ Name: tpuv4
 Chip:
   chip_id: 'tpuv4'
   tech: '7nm'
+  dataflow: 'roofline' # 'roofline' for the roofline model, or 'WS' for weight-stationary
   # dataflow: 'WS'
-  dataflow: 'simple' # 'simple' for the roofline model, or 'WS' for weight-stationary
   freq: 1.05e+9
   bytes_per_word: 2 # bfloat16 or fp16
 
