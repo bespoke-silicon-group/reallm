@@ -9,7 +9,6 @@ outputs/
 *.swp
 *.pyc
 *.log
-*.csv
 *.pdf
 *.pkl
 *.ini

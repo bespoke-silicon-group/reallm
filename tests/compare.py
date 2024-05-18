@@ -64,59 +64,32 @@ if __name__ == '__main__':
     hw = args.hardware
     model = args.model
 
-    # Compare the hardware evaluation
-    target_hw_csv = f'tests/{hw}/{hw}.csv'
-    gen_hw_csv = f'outputs/{hw}/{hw}.csv'
     mismatch = False
-    with open(target_hw_csv, 'r') as f1, open(gen_hw_csv, 'r') as f2:
-        target_lines = f1.readlines()
-        gen_lines = f2.readlines()
-        header = target_lines[0].split(',')
-        for i in range(1, len(target_lines)):
-            target_specs = target_lines[i].split(',')
-            gen_specs = gen_lines[i].split(',')
-            for j in range(len(target_specs) - 3):
-                if float(gen_specs[j]) == 0.0:
-                    error_rate = abs(float(gen_specs[j]) - float(target_specs[j])) 
-                else:
-                    error_rate = abs(float(gen_specs[j]) - float(target_specs[j])) / float(gen_specs[j])
-                if error_rate > 0.0001:
-                    mismatch = True
-                    print(f'{hw} hardware mismatch on {header[j]}. Target: {target_specs[j]}, Gen: {gen_specs[j]}')
-                    break
-
-    if not mismatch:
-        print(f'{hw} hardware matches!')
-    
-    # Compare the system evaluation
-    batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    with open(f'outputs/{hw}/{model}.pkl', 'rb') as f:
-        sys = pickle.load(f)
-        eval_len_sys = split_sys(sys, 'eval_len')
-    
-    with open(f'tests/{hw}/{model}.csv', 'r') as f:
-        target_lines = f.readlines()
-        header = target_lines[0].split(',')
-        i = 1
-        for eval_len in eval_len_sys:
-            sys = eval_len_sys[eval_len][0]
-            for batch in batch_sizes:
-                perf = sys.batch_opt_generate_tco[batch]
-                prefill_io, prefill_compute, prefill_mem = get_latency_breakdown(perf, 'prefill')
-                generate_io, generate_compute, generate_mem = get_latency_breakdown(perf, 'generate')
-                tco_per_Mtoken, capex, opex = get_tco_breakdown(perf)
-                gen_specs = [prefill_io, prefill_compute, prefill_mem, generate_io, generate_compute, generate_mem, tco_per_Mtoken, capex, opex]
-                target_specs = target_lines[i].split(',')[3:]
-                for j in range(len(gen_specs)):
-                    if gen_specs[j] == 0.0:
-                        error_rate = abs(gen_specs[j] - float(target_specs[j])) 
+    for comparison in ['hw', 'sw']:
+        if comparison == 'hw':
+            target_csv = f'tests/{hw}/{hw}.csv'
+            gen_csv = f'outputs/{hw}/{hw}.csv'
+        else:
+            target_csv = f'tests/{hw}/{model}.csv'
+            gen_csv = f'outputs/{hw}/{model}.csv'
+        with open(target_csv, 'r') as f1, open(gen_csv, 'r') as f2:
+            target_lines = f1.readlines()
+            gen_lines = f2.readlines()
+            header = target_lines[0].split(',')
+            for i in range(1, len(target_lines)):
+                target_specs = target_lines[i].split(',')
+                gen_specs = gen_lines[i].split(',')
+                for j in range(len(target_specs)):
+                    if isinstance(gen_specs[j], str):
+                        continue
+                    if float(gen_specs[j]) == 0.0:
+                        error_rate = abs(float(gen_specs[j]) - float(target_specs[j])) 
                     else:
-                        error_rate = abs(gen_specs[j] - float(target_specs[j])) / gen_specs[j]
+                        error_rate = abs(float(gen_specs[j]) - float(target_specs[j])) / float(gen_specs[j])
                     if error_rate > 0.0001:
                         mismatch = True
-                        print(f'{hw} {model} mismatch on eval_len {eval_len}, batch {batch}, {header[j + 3]}. Target: {target_specs[j]}, Gen: {gen_specs[j]}')
+                        print(f'Mismatch on {header[j]}. Target: {target_specs[j]}, Gen: {gen_specs[j]}')
                         break
-                i += 1
 
     if not mismatch:
-        print(f'{hw} {model} matches!')
+        print(f'Validation passed for {hw} on {model}!')

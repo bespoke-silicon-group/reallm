@@ -1,4 +1,4 @@
-import argparse, yaml
+import argparse, yaml, os
 from phases.hardware_exploration import hardware_exploration
 from phases.software_evaluation import software_evaluation
 
@@ -24,6 +24,13 @@ def main():
   hardware_exploration(hw_config, constants, args.outputs_dir, hardware_name, args.verbose)
   
   model_config = yaml.safe_load(open(args.model_config, 'r'))
+  if args.sys_config == None:
+    args.sys_config = 'inputs/software/system/sys_default.yaml'
+    print(f'Warning: System configuration file not found. Using default configuration: {args.sys_config}')
+  if os.path.exists(args.sys_config) == False:
+    args.sys_config = 'inputs/software/system/sys_default.yaml'
+    print(f'Warning: System configuration file not found. Using default configuration: {args.sys_config}')
+
   sys_config = yaml.safe_load(open(args.sys_config, 'r'))
   hw_pickle = f'{args.outputs_dir}/{hardware_name}/{hardware_name}.pkl'
   software_evaluation(model_config, sys_config, hw_pickle, args.outputs_dir, args.verbose)

@@ -176,11 +176,23 @@ def perf_to_csv(result_pickle_path: str, csv_path: str):
             while batch <= max_batch:
                 # find the mapping best for the optimization goal
                 if opt_goal == 'prefill_lat':
-                    perf = _sys.batch_opt_prefill_lat[batch]
+                    if batch in _sys.batch_opt_prefill_lat:
+                        perf = _sys.batch_opt_prefill_lat[batch]
+                    else:
+                        batch *= 2
+                        continue
                 elif opt_goal == 'decoding_lat':
-                    perf = _sys.batch_opt_generate_lat[batch]
+                    if batch in _sys.batch_opt_generate_lat:
+                        perf = _sys.batch_opt_generate_lat[batch]
+                    else:
+                        batch *= 2
+                        continue
                 else:
-                    perf = _sys.batch_opt_generate_tco[batch]
+                    if batch in _sys.batch_opt_generate_tco:
+                        perf = _sys.batch_opt_generate_tco[batch]
+                    else:
+                        batch *= 2
+                        continue
                 prefill_io, prefill_compute, prefill_mem = get_latency_breakdown(perf, 'prefill')
                 generate_io, generate_compute, generate_mem = get_latency_breakdown(perf, 'generate')
                 tco_per_Mtoken, capex, opex = get_tco_breakdown(perf)
