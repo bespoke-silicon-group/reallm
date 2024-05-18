@@ -21,14 +21,14 @@ def hardware_exploration(config: dict, constants: dict, results_dir: str, hardwa
   start_time = time.time()
   chips = chip_config.explore(constants=chip_constants, verbose=verbose)
   packges = pkg_config.explore(chips=chips, constants=pkg_constants, verbose=verbose)
-  servers = srv_config.explore(pkgs=packges, constants=srv_constants, 
+  servers = srv_config.explore(pkgs=packges, constants=srv_constants,
                                tco_constants=tco_constants, energy_constants=energy_constants,
                                verbose=verbose)
   print(f'Finished {hardware_name} hardware exploration in {time.time() - start_time} seconds')
 
   results_dir = results_dir + '/' + hardware_name
   if os.path.exists(results_dir) == False:
-    os.mkdir(results_dir)
+    os.makedirs(results_dir)
   # print results to csv file
   o_file_path = results_dir + '/' + hardware_name + '.csv'
   to_csv(o_file_path, servers)
@@ -47,4 +47,3 @@ if __name__ == '__main__':
   config = yaml.safe_load(open(args.config_file, 'r'))
   constants = yaml.safe_load(open(args.constants_file, 'r'))
   hardware_exploration(config, constants, args.results_dir, hardware_name, args.verbose)
-
