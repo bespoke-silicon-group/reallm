@@ -1,5 +1,6 @@
 import multiprocessing, itertools, copy
 from structs.Base import Base
+from structs.Constants import ChipConstants, PackageConstants, ServerConstants, TCOConstants, EnergyConstants
 from structs.Chip import Chip
 from structs.Package import Package
 from structs.Server import Server
@@ -11,18 +12,37 @@ from dataclasses import dataclass
 # Expand dict
 def expand_dict(input_dict:  Dict) -> List[Dict]:
   '''
-  Given a dict, return a list of all combinations of the dict.
+  Given a dict, return a list of all combinations of the dict (full exploration),
+  or a list of combinations of the dict with the associated_explore key as the constraint.
   '''
-  for key in input_dict:
-    if isinstance(input_dict[key], Dict):
-      input_dict[key] = expand_dict(input_dict[key])
-    if not isinstance(input_dict[key], List):
-      input_dict[key] = [input_dict[key]]
+  if 'associated_explore' in input_dict:
+    constraint_key = input_dict['associated_explore']
+    input_dict.pop('associated_explore')
+    all_dicts = []
+    for constraint_val in input_dict[constraint_key]:
+      new_dict = dict()
+      for key in input_dict:
+        if key == constraint_key:
+          new_dict[key] = constraint_val
+        elif isinstance(input_dict[key], Dict):
+          if constraint_val in input_dict[key]:
+            new_dict[key] = input_dict[key][constraint_val]
+          else:
+            new_dict[key] = input_dict[key]
+        else:
+          new_dict[key] = input_dict[key]
+      all_dicts.append(new_dict)
+  else:
+    for key in input_dict:
+      if isinstance(input_dict[key], Dict):
+        input_dict[key] = expand_dict(input_dict[key])
+      if not isinstance(input_dict[key], List):
+        input_dict[key] = [input_dict[key]]
 
-  all_dicts = []
-  keys, values = zip(*input_dict.items())
-  for v in itertools.product(*values):
-    all_dicts.append(dict(zip(keys, v)))
+    all_dicts = []
+    keys, values = zip(*input_dict.items())
+    for v in itertools.product(*values):
+      all_dicts.append(dict(zip(keys, v)))
 
   return all_dicts
 
@@ -38,11 +58,12 @@ class ChipConfig(Base):
   def update(self) -> None:
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, verbose: bool = False) -> List[Chip]:
+  def explore(self, constants: ChipConstants, verbose: bool = False) -> List[Chip]:
     chips = []
     chip_id = 0
     for cfg in self.all_configs:
       config = copy.deepcopy(cfg)
+      config['constants'] = constants
       if 'chip_id' not in config:
         config['chip_id'] = chip_id
       if 'pkg2pkg_io' in config:
@@ -77,13 +98,14 @@ class PackageConfig(Base):
     #     self.yaml_config['mem_3d'] = [expand_dict(mem) for mem in self.yaml_config['mem_3d']][0]
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, chips: List[Chip], verbose: bool = False) -> List[Package]:
+  def explore(self, chips: List[Chip], constants: PackageConstants, verbose: bool = False) -> List[Package]:
     pkgs = []
     pkg_id = 0
     for chip in chips:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
         config['chip'] = chip
+        config['constants'] = constants
         if pkg_id not in config:
           config['package_id'] = pkg_id
         if 'mem_3d' in config:
@@ -112,12 +134,17 @@ class ServerConfig(Base):
   def update(self) -> None:
     self.all_configs = expand_dict(self.yaml_config)
 
-  def explore(self, pkgs: List[Package], verbose: bool = False) -> List[Server]:
+  def explore(self, pkgs: List[Package], 
+              constants: ServerConstants, tco_constants: TCOConstants, energy_constants: EnergyConstants,
+              verbose: bool = False) -> List[Server]:
     srv_specs = []
     srv_id = 0
     for pkg in pkgs:
       for cfg in self.all_configs:
         config = copy.deepcopy(cfg)
+        config['constants'] = constants
+        config['tco_constants'] = tco_constants
+        config['energy_constants'] = energy_constants
         if 'server_id' not in config:
           config['server_id'] = srv_id
         config['package'] = pkg

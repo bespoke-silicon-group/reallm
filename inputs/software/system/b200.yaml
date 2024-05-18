@@ -1,0 +1,6 @@
+num_servers: [1, 2, 4, 8]
+allreduce_algo: '2d_ring'
+
+workload:
+  max_batch: 1024
+  eval_len: [[256, 64], [64, 256], [1024, 256], [256, 1024]]

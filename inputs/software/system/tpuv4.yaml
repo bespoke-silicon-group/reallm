@@ -1,0 +1,10 @@
+num_servers: 16
+allreduce_algo: '2d_ring'
+compute_perf_efficiency: 0.7
+io_bandwidth_efficiency: 0.7
+weight_bandwidth_efficiency: 0.6
+
+workload:
+  max_batch: 1024
+  eval_len: [[20, 8], [60, 20], [128, 8]]
+  

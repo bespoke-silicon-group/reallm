@@ -2,10 +2,12 @@ from dataclasses import dataclass, replace
 from typing import Optional
 
 from .Base import Base
-from .Constants import TCOConstants, TCOConstantsCommon
+from .Constants import TCOConstants
 
 @dataclass
 class TCO(Base):
+    constants: TCOConstants
+
     server_tdp: float
     server_cost: float
     server_life: float # in years
@@ -23,7 +25,6 @@ class TCO(Base):
     fix_part: Optional[float] = None
     power_part: Optional[float] = None # depends on the real utilization (power)
 
-    constants: TCOConstants = TCOConstantsCommon
 
     def update(self) -> None:
         # Fixed parts of TCO

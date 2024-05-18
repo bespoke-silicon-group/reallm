@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import math
-from typing import Optional, List
-from sram import SRAM, MEMORY
-from vlsi import VLSI
+from typing import List
+from micro_arch_sim.sram import SRAM, MEMORY
+from micro_arch_sim.vlsi import VLSI
 
-from magic_numbers import available_srams_12nm, available_srams_7nm, vlsi_12nm, vlsi_7nm
+from micro_arch_sim.vlsi_numbers import available_srams_7nm, vlsi_7nm
 
 
 # return capacity in MB
@@ -12,8 +12,8 @@ def design_memory(
     area: float,  # um^2
     bandwidth: int,  # bits per cycle
     word_width: int = 16,  # bits per word
-    vlsi_params: VLSI = vlsi_12nm,
-    available_srams: List[SRAM] = available_srams_12nm,
+    vlsi_params: VLSI = vlsi_7nm,
+    available_srams: List[SRAM] = available_srams_7nm,
 ) -> float:
     area_sorted_srams = sorted(available_srams, key=lambda x: x.area)
     crossbar_ports = math.ceil(bandwidth / word_width)
