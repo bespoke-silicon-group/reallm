@@ -18,6 +18,7 @@ class Performance(Base):
     mapping: Mapping
     prefill_len: int
     generate_len: int
+    num_distinct_lora: int = 0 # number of distinct lora models in the batch
     update_on_init: bool = True
     asplos_version: bool = False
 
@@ -327,6 +328,9 @@ class Performance(Base):
         if self.system.model.d_ff is None:
             self.system.model.d_ff = 4 * d
         d_ff = self.system.model.d_ff
+        d_lora = self.system.model.d_lora
+        if self.num_distinct_lora > 0 and self.system.model.d_lora == 0:
+            raise ValueError('d_lora is not set, but there are distinct LoRA models in the batch')
         t = self.mapping.t
         data_bytes = self.system.model.bytes_per_number
 
@@ -395,6 +399,14 @@ class Performance(Base):
         A = (activation_row, d)
         B = (d, math.ceil(3 * d_atten / t))
         atten_qkv_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+        # LoRA
+        if self.num_distinct_lora > 0:
+            A = (activation_row, d)
+            B = (d, d_lora)
+            lora_qkv_matmul1 = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+            A = (activation_row, d_lora)
+            B = (d_lora, math.ceil(3 * d_atten / t))
+            lora_qkv_matmul2 = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # attention matmul: Q * K_T, 
         # prefill: (micro_batch, ctx_len, d / t) * (micro_batch, d / t, ctx_len)
@@ -444,6 +456,14 @@ class Performance(Base):
         A = (activation_row, math.ceil(d_atten / t))
         B = (math.ceil(d_atten / t), d)
         atten_fc_latency = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+        # LoRA
+        if self.num_distinct_lora > 0:
+            A = (activation_row, math.ceil(d_atten / t))
+            B = (math.ceil(d_atten / t), d_lora)
+            lora_o_matmul1  = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
+            A = (activation_row, d_lora)
+            B = (d_lora, d)
+            lora_o_matmul2  = MatmulLatency(A, B, self.system.server.package.chip, self.system.weight_bw_per_chip)
         ##################################################################
         # all-reduce, DOUBLE CHECK HERE
         atten_all_to_all_latency = self._get_allreduce_latency(t, d * data_bytes, collective_links, self.system.allreduce_algo) / 2 # half of the latency of all-reduce
@@ -488,19 +508,38 @@ class Performance(Base):
         else:
             # Double check this
             fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes, collective_links, self.system.allreduce_algo)
-
-        micro_batch_latency = MicroBatchLatency(self.mapping.p, 
-                                                self.system.model.num_layers, 
-                                                stage2stage_latency, 
-                                                atten_qkv_latency, 
-                                                atten_matmul1_latency, 
-                                                atten_communication_latency_1, 
-                                                atten_matmul2_latency, 
-                                                atten_fc_latency, 
-                                                atten_communication_latency_2, 
-                                                fc1_latency, 
-                                                fc2_latency, 
-                                                fc_communication_latency)
+        
+        if self.num_distinct_lora > 0:
+            micro_batch_latency = MicroBatchLatency(self.mapping.p, 
+                                                    self.system.model.num_layers, 
+                                                    stage2stage_latency, 
+                                                    atten_qkv_latency, 
+                                                    atten_matmul1_latency, 
+                                                    atten_communication_latency_1, 
+                                                    atten_matmul2_latency, 
+                                                    atten_fc_latency, 
+                                                    atten_communication_latency_2, 
+                                                    fc1_latency, 
+                                                    fc2_latency, 
+                                                    fc_communication_latency,
+                                                    True,
+                                                    lora_qkv_matmul1,
+                                                    lora_qkv_matmul2,
+                                                    lora_o_matmul1,
+                                                    lora_o_matmul2)
+        else:
+            micro_batch_latency = MicroBatchLatency(self.mapping.p, 
+                                                    self.system.model.num_layers, 
+                                                    stage2stage_latency, 
+                                                    atten_qkv_latency, 
+                                                    atten_matmul1_latency, 
+                                                    atten_communication_latency_1, 
+                                                    atten_matmul2_latency, 
+                                                    atten_fc_latency, 
+                                                    atten_communication_latency_2, 
+                                                    fc1_latency, 
+                                                    fc2_latency, 
+                                                    fc_communication_latency)
 
         return micro_batch_latency 
 
@@ -753,6 +792,13 @@ class MicroBatchLatency(Base):
     fc2: MatmulLatency
     fc_communication: float
 
+    # LoRA
+    lora: bool = False
+    lora_qkv_matmul1: Optional[MatmulLatency] = None
+    lora_qkv_matmul2: Optional[MatmulLatency] = None
+    lora_o_matmul1: Optional[MatmulLatency] = None
+    lora_o_matmul2: Optional[MatmulLatency] = None
+
     # derived metrics
     pipeline_stage: Optional[float] = None
     total: Optional[float] = None
@@ -777,6 +823,8 @@ class MicroBatchLatency(Base):
 
     def update(self) -> None:
         layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
+        if self.lora:
+            layer_compute += self.lora_qkv_matmul1.time + self.lora_qkv_matmul2.time + self.lora_o_matmul1.time + self.lora_o_matmul2.time
         layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
         layers_per_stage = math.ceil(self.num_layers / self.p)
         self.pipeline_stage = (layer_compute + layer_communication) * layers_per_stage + self.stage2stage
