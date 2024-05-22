@@ -23,6 +23,8 @@ class System(Base):
     # optional inputs
     max_batch: int = 1024 # max batch size
     eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
+    num_lora: int = 0 # number of low-rank adaptation models
+    lora_dist: str = 'uniform' # distribution of low-rank adaptation models
     energy_model: bool = True # whether to use the energy model for calculating the TCO
     compute_perf_efficiency: float = 1.0 # the ratio of the actual compute performance to the theoretical performance
     io_bandwidth_efficiency: float = 1.0 # the ratio of the actual IO bandwidth to the theoretical bandwidth
@@ -32,6 +34,7 @@ class System(Base):
 
     # derived fileds
     valid: Optional[bool] = None # if the system is able to hold all the model parameters
+    model_params_byte: Optional[int] = None # model parameters, including loRA, in bytes
     total_mem: Optional[int] = None # total memory, in Byte
     weight_bw_per_chip: Optional[float] = None # weight bandwidth per chip, in Byte/sec
     kv_bw_per_chip: Optional[float] = None # kv cache bandwidth per chip, in Byte/sec
@@ -60,12 +63,13 @@ class System(Base):
         return Performance(system=self, prefill_len=prefill_len, generate_len=generate_len)
     
     def _hardware_update(self) -> None:
+        self.model_params_byte = self.model.model_size_byte + self.num_lora * self.model.lora_size_byte
         # update the number of servers using the kv cache ratio
         if self.kv_cache_ratio or self.max_ctx_len_batch_1:
             if self.kv_cache_ratio:
-                required_mem = self.model.model_size_byte / (1 - self.kv_cache_ratio)
+                required_mem = self.model_params_byte / (1 - self.kv_cache_ratio)
             else:
-                required_mem = self.model.model_size_byte + self.max_ctx_len_batch_1 * self.model.kv_cache_size_per_token_byte
+                required_mem = self.model_params_byte + self.max_ctx_len_batch_1 * self.model.kv_cache_size_per_token_byte
             if self.num_servers == None or self.num_servers * self.server.total_mem < required_mem:
                 # if the number of servers is not provided, we will use the total memory to derive it
                 self.num_servers = math.ceil(required_mem / self.server.total_mem)
@@ -82,11 +86,11 @@ class System(Base):
             if not self.num_servers:
                 self.num_servers = math.ceil(self.max_tco / self.server.tco.total)
             self.total_mem = self.num_servers * self.server.total_mem
-            if self.total_mem < self.model.model_size_byte:
+            if self.total_mem < self.model_params_byte:
                 return False
         else:
             raise ValueError('Please provide one of kv_cache_ratio, max_ctx_len_batch_a, num_servers or max_tco.')
-        self.kv_cache_ratio = 1 - self.model.model_size_byte / self.total_mem
+        self.kv_cache_ratio = 1 - self.model_params_byte / self.total_mem
         kv_cache_mem = self.kv_cache_ratio * self.total_mem
         if self.max_ctx_len_batch_1 == None:
             self.max_ctx_len_batch_1 = math.floor(kv_cache_mem / self.model.kv_cache_size_per_token_byte)
@@ -196,7 +200,8 @@ class System(Base):
                                     mappings = new_mappings
 
             for mapping in mappings:
-                perf = Performance(system=self, mapping=mapping, batch=batch, 
+                num_distinct_lora = self._get_exp_num_distinct_lora(batch)
+                perf = Performance(system=self, mapping=mapping, batch=batch, num_distinct_lora=num_distinct_lora,
                                    prefill_len=prefill_len, generate_len=generate_len)
                 if perf.prefill_latency < batch_opt_prefill_lat:
                     batch_opt_prefill_lat = perf.prefill_latency
@@ -260,4 +265,14 @@ class System(Base):
                         prefill_micro_batch *= 2
                     micro_batch *= 2
         return valid_mappings
+    
+    def _get_exp_num_distinct_lora(self, batch: int) -> int:
+        if self.num_lora == 0:
+            return 0
+        # get the expected number of distinct LoRA models, given the distribution and batch sizes
+        if self.lora_dist == 'uniform':
+            num_distinct_lora = self.num_lora * (1 - (1 - 1 / self.num_lora) ** batch)
+        else:
+            raise ValueError('Unsupported LoRA distribution.')
+        return int(round(num_distinct_lora))
             

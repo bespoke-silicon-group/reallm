@@ -27,6 +27,10 @@ def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickl
                 sys_config['max_batch'] = sys_config['workload']['max_batch']
             if 'eval_len' in sys_config['workload']:
                 sys_config['eval_len'] = sys_config['workload']['eval_len']
+            if 'num_lora' in sys_config['workload']:
+                sys_config['num_lora'] = sys_config['workload']['num_lora']
+            if 'lora_dist' in sys_config['workload']:
+                sys_config['lora_dist'] = sys_config['workload']['lora_dist']
             sys_config.pop('workload')
     else:
         sys_config = dict()
