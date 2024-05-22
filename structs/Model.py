@@ -15,7 +15,7 @@ class Model(Base):
                                 # 1 means each head has its own kv cache, i.e., multihead attention
                                 # num_heads means all heads share the same kv cache, i.e., multiquery attention
                                 # 1 < heads_per_kv_cache < num_heads means grouped query attention
-    d_lora: int = 0 # low-rank adaptation dimension, used on q,k,v,o
+    d_lora: Optional[dict] = None # key: weight type, such as 'q', 'k', 'v' and 'o'; value: rank 
     bytes_per_number: int = 2
 
     model_size: Optional[int] = None # number of parameters in the model
@@ -57,13 +57,13 @@ class Model(Base):
         return self.num_layers * 2 * self.num_heads * self.d_head / self.heads_per_kv_cache
     
     def _get_lora_size_byte(self) -> int:
-        q_A_size = self.num_layers * self.num_heads * self.d * self.d_lora
-        q_B_size = self.num_layers * self.num_heads * self.d_lora * self.d_head
-        kv_A_size = 2 * self.num_layers * self.num_heads * self.d * self.d_lora / self.heads_per_kv_cache
-        kv_B_size = 2 * self.num_layers * self.num_heads * self.d_lora * self.d_head  / self.heads_per_kv_cache
-        o_A_size = self.num_layers * self.num_heads * self.d_head * self.d_lora
-        o_B_size = self.num_layers * self.num_heads * self.d_lora * self.d
-        lora_size = q_A_size + q_B_size + kv_A_size + kv_B_size + o_A_size + o_B_size
+        if self.d_lora is None:
+            return 0
+        lora_size = 0
+        for weight_type, rank in self.d_lora.items():
+            if weight_type not in ['q', 'k', 'v', 'o']:
+                raise ValueError(f'Unsupported LoRA weight type: {weight_type}')
+            lora_size += 2 * self.num_layers * self.d * rank # A and B
         return lora_size * self.bytes_per_number
     
     def get_prefill_flops(self, ctx_len: int) -> int:

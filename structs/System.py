@@ -200,8 +200,12 @@ class System(Base):
                                     mappings = new_mappings
 
             for mapping in mappings:
-                num_distinct_lora = self._get_exp_num_distinct_lora(batch)
-                perf = Performance(system=self, mapping=mapping, batch=batch, num_distinct_lora=num_distinct_lora,
+                # the batch size for LoRA computation
+                if self.num_lora == 0:
+                    lora_batch = None
+                else:
+                    lora_batch = 1
+                perf = Performance(system=self, mapping=mapping, batch=batch, lora_batch=lora_batch,
                                    prefill_len=prefill_len, generate_len=generate_len)
                 if perf.prefill_latency < batch_opt_prefill_lat:
                     batch_opt_prefill_lat = perf.prefill_latency
