@@ -1,5 +1,5 @@
 Model:
-  name: 'gpt3'
+  name: 'gpt3_lora'
   num_layers: 96
   d: 12288
   d_lora: {'q': 2, 'k': 2, 'v': 2, 'o': 2}

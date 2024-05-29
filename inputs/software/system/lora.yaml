@@ -1,15 +1,15 @@
-num_servers: 16
+num_servers: 4
 allreduce_algo: '2d_ring'
 
 default_mapping:
-  t: 64
+  t: 16
   p: 1
   # 0 means micro-batch = batch
   micro_batch: 0 
   prefill_micro_batch: 0 
 
 workload:
-  max_batch: 1024
+  max_batch: 128
   eval_len: [[256, 64], [64, 256]]
-  num_lora: 32
-  lora_dist: 'uniform' # 'uniform' or 'normal'
+  num_lora: 128
+  lora_dist: 'uniform' # 'uniform' or 'skewed'

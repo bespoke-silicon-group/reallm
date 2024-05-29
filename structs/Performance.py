@@ -793,6 +793,7 @@ class MicroBatchLatency(Base):
     # derived metrics
     pipeline_stage: Optional[float] = None
     total: Optional[float] = None
+    lora_total: Optional[float] = None
     compute: Optional[float] = None
     communication: Optional[float] = None
     utilization: Optional[float] = None
@@ -816,7 +817,10 @@ class MicroBatchLatency(Base):
         layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
         if self.lora is not None:
             for _, lora_latency in self.lora.items():
-                layer_compute += lora_latency.time
+                self.lora_total += lora_latency.time
+        else:
+            self.lora_total = 0
+        layer_compute += self.lora_total
         layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
         layers_per_stage = math.ceil(self.num_layers / self.p)
         self.pipeline_stage = (layer_compute + layer_communication) * layers_per_stage + self.stage2stage
