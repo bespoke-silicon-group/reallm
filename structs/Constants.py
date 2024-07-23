@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class ChipConstants():
     # SRAM density mm2/MB
@@ -24,6 +25,7 @@ class ChipConstants():
     mem_3d_tsv_ctrl_area_per_vault: Optional[float] = None # mm2
     mem_3d_ctrl_area_per_vault: Optional[float] = None # mm2
     mem_3d_area_per_tsv: Optional[float] = None # mm2
+    mem_3d_test_area_per_vault: Optional[float] = None # mm2
 
 @dataclass
 class PackageConstants():
@@ -31,7 +33,7 @@ class PackageConstants():
     max_die_area: float
     max_power_density: float # Watts/mm2
 
-    # Package cost model, based on Chiplet Actuary 
+    # Package cost model, based on Chiplet Actuary
     # Paper: https://arxiv.org/abs/2203.12268
     # Github: https://github.com/Yinxiao-Feng/DAC2022
     # Organic Substrate

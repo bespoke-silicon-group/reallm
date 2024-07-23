@@ -1,12 +1,15 @@
 import math
 from dataclasses import dataclass
 from typing import Optional
-from .Constants import ChipConstants
-from .Base import Base
-from .IO import IO
+
 from micro_arch_sim.design_memory import design_memory
 from micro_arch_sim.design_memory_return_area import design_memory_return_area
 from micro_arch_sim.vlsi_numbers import available_srams, vlsi_constants
+
+from .Base import Base
+from .Constants import ChipConstants
+from .IO import IO
+
 # from micro_arch_sim.magic_numbers import available_srams, vlsi_constants
 
 @dataclass
@@ -61,7 +64,7 @@ class Chip(Base):
    mac_area: Optional[float] = None
 
    die_yield: Optional[float] = 0.0
-   dpw: Optional[int] = None # dies per wafer   
+   dpw: Optional[int] = None # dies per wafer
 
    tops: Optional[float] = None
    sram_mb: Optional[float] = None
@@ -84,7 +87,7 @@ class Chip(Base):
          self.io_area = self.pkg2pkg_io.area + self.chip2chip_io.area
       else:
          self.io_area = self.pkg2pkg_io.area
-      
+
       # HBM PHY and controller area
       self.other_area += self.hbm_channels * self.constants.hbm_phy_ctrl_area_per_channel
       # 3D memory TSV and controller area
@@ -93,6 +96,9 @@ class Chip(Base):
       else:
          self.other_area += self.mem_3d_vaults * self.constants.mem_3d_tsv_ctrl_area_per_vault
 
+      if self.mem_3d_vaults > 0:
+         self.other_area += self.mem_3d_vaults * self.constants.mem_3d_test_area_per_vault
+
       if self.perf and self.sram:
          self.update_using_perf_sram()
       elif self.area and self.mac_ratio:
@@ -100,7 +106,7 @@ class Chip(Base):
       else:
          self.valid = False
          self.invalid_reason = 'Wrong chip input configuration'
-      
+
       if self.sram:
          if self.check_area():
             self.tdp = self._get_tdp()
@@ -138,8 +144,8 @@ class Chip(Base):
             self.sram_mb = self.sram_area / self.constants.sram_density
          else:
             sram_area_um2 = self.sram_area * 1e6
-            self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle, 
-                                         vlsi_params=vlsi_constants[self.sram_tech], 
+            self.sram_mb = design_memory(sram_area_um2, sram_bw_bit_per_cycle,
+                                         vlsi_params=vlsi_constants[self.sram_tech],
                                          available_srams=available_srams[self.sram_tech])
          if self.sram_mb:
             self.sram = self.sram_mb * 1e6
@@ -153,8 +159,8 @@ class Chip(Base):
       if self.area_model == 'linear':
          self.sram_area = self.sram_mb * self.constants.sram_density
       else:
-         sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle, 
-                                                   vlsi_params=vlsi_constants[self.sram_tech], 
+         sram_area_um2 = design_memory_return_area(self.sram_mb, sram_bw_bit_per_cycle,
+                                                   vlsi_params=vlsi_constants[self.sram_tech],
                                                    available_srams=available_srams[self.sram_tech])
          self.sram_area = sram_area_um2 / 1e6
       self.mac_area = self.perf / 1e12 * self.macs_density
@@ -180,7 +186,7 @@ class Chip(Base):
          self.valid = False
          self.invalid_reason = f'Chip power density {self.power_density} W/mm2 is too high'
          return False
-   
+
    def _get_tdp(self) -> float:
       tdp = self.perf / 1e12 * self.w_per_tops
       self.core_tdp = tdp
@@ -193,9 +199,9 @@ class Chip(Base):
       self.dpw = dies_per_wafer(self.area, self.constants.wafer_diameter, self.constants.wafer_dicing_gap)
       die_cost = (self.constants.wafer_cost * 1.0 / self.dpw) / self.die_yield
       testing_cost_per_die = die_cost * self.constants.testing_cost_overhead
-  
+
       return die_cost + testing_cost_per_die
-   
+
 #################################################
 # Yield and DPW calculation, from ASIC Cloud    #
 #################################################
@@ -211,7 +217,7 @@ def get_die_yield(area: float, D0: float, alpha: float) -> float:
 def dies_per_wafer(die_area: float, wafer_diameter: float, wafer_dicing_gap: float) -> int:
 
    # given circle radious and square edge length, and distance between
-   # diameter and center row of squares (longest one), calculates the 
+   # diameter and center row of squares (longest one), calculates the
    # number of squares that can be fited
    def max_fit(r, a, d) -> int:
       D1 = a / 2.0 + d
@@ -228,9 +234,9 @@ def dies_per_wafer(die_area: float, wafer_diameter: float, wafer_dicing_gap: flo
          summ += math.floor(l / a)
          D2 += a
       return int(summ)
-   
+
    # we want to find the optimal value by binary searching the different values
-   # for center row distance to diameter. The optimal solution would have 
+   # for center row distance to diameter. The optimal solution would have
    # the longest row farthest from the center, having two long lines is the best if possible
    def max_square(r, a) -> int:
       start = 0.0
@@ -239,7 +245,7 @@ def dies_per_wafer(die_area: float, wafer_diameter: float, wafer_dicing_gap: flo
       max_end = max_fit(r, a, end)
       # if we can fit two long rows, it's the optimal point
       if max_end >= max_start:
-         return max_end	
+         return max_end
       step = a / 8.0
       end = end / 2.0
       max_end = max_fit(r, a, end)
@@ -259,5 +265,3 @@ def dies_per_wafer(die_area: float, wafer_diameter: float, wafer_dicing_gap: flo
    # by adding the dicing gap to die width as square edge and calculate
    # radious instead of diameter
    return max_square(wafer_diameter / 2.0, math.sqrt(die_area) + wafer_dicing_gap)
-
-
