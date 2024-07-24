@@ -11,7 +11,13 @@ chip_header = [
                'tdp',
                'cost',
                ]
-pkg_header = []
+pkg_header = ['num_chips',
+              'tops',
+              'sram_mb',
+              'tdp',
+              'dram_gb',
+              'dram_bw_TB_per_sec',
+              ]
 
 srv_header = ['num_packages',
               'sram_mb',

@@ -64,8 +64,9 @@ def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickl
     result_pickle_path = f'{results_dir}/{hardware_name}/{model.name}.pkl'
     with open(result_pickle_path, 'wb') as f:
       pickle.dump(all_systems, f)
-    csv_path = f'{results_dir}/{hardware_name}/{model.name}.csv' 
-    perf_to_csv(result_pickle_path, csv_path)
+    # comment out the performance dump for now 
+    # csv_path = f'{results_dir}/{hardware_name}/{model.name}.csv' 
+    # perf_to_csv(result_pickle_path, csv_path)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
 
 if __name__ == '__main__': 
