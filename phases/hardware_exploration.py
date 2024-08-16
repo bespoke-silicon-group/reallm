@@ -1,7 +1,7 @@
 import argparse
 from structs.HardwareConfig import ChipConfig, PackageConfig, ServerConfig
 from structs.Constants import ChipConstants, PackageConstants, ServerConstants, TCOConstants, EnergyConstants
-from utils.hardware_dump import to_csv
+from scripts.hardware_dump import to_csv
 import pickle
 import yaml
 import os
@@ -47,3 +47,7 @@ if __name__ == '__main__':
   config = yaml.safe_load(open(args.config_file, 'r'))
   constants = yaml.safe_load(open(args.constants_file, 'r'))
   hardware_exploration(config, constants, args.results_dir, hardware_name, args.verbose)
+  if config['Chip']['dataflow'][0] == 'llmcompass':
+    from scripts.gen_llmcompass_config import gen_llmcompass_config
+    print('Generating LLMCompass config file')
+    gen_llmcompass_config(args.config_file, 'LLMCompass/configs/template.json')

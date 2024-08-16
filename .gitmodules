@@ -1,0 +1,4 @@
+[submodule "LLMCompass"]
+	path = LLMCompass
+	url = git@github.com:hwpeng/LLMCompass.git
+	branch = ISCA_AE

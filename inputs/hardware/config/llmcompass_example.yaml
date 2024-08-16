@@ -1,0 +1,79 @@
+Name: llmcompass_example
+# tpuv5p https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v5p
+
+Chip:
+  chip_id: 'llmcompass_example'
+  tech: '7nm'
+  area_model: 'linear' # 'linear' or 'micro_arch'
+  # area_model: 'micro_arch'
+  dataflow: 'llmcompass' # 'roofline' for the roofline model, or 'WS' for weight-stationary
+                         # or 'llmcompass'
+  freq: 1.0e+9 # frequency, in Hz
+  bytes_per_word: 2 # bfloat16 or fp16
+
+  # To define a chip, you should either give the perf, sram and bandwidth, 
+  # or area, mac_ratio and operational intensity
+  perf: 459.0e+12 # peak performance, in FLOPS
+  sram: 300.0e+6 # sram size, in Bytes
+  sram_bw: 2.0e+12 # sram bandwidth, in Bytes/s
+  # area: 200.0 # mm2
+  # mac_ratio: 0.2 # compute_unit_area / (compute_unit_area + sram_area)
+  # operational_intensity: 4 # FLOPs / SRAM_BW
+
+  other_area: 70 # mm2, area except SRAM, compute units, HBM PHY&Ctrl, 3D MEM TSV&Ctrl, and I/Os
+  core_area_ratio: 0.95
+
+  # number of HBM channels
+  hbm_channels: 48
+  # number of 3D memory vaults
+  mem_3d_vaults: 0
+
+  core:
+    core_count: 4
+    sublane_count: 16
+    sa_width: 16
+    sa_height: 16
+    vector_width: 32
+    vector_flop_per_cycle: 4
+    num_registers: 16384
+    SRAM_KB: 256
+
+  # I/Os to the chips
+  pkg2pkg_io: # 300 GB/s per chip per direction
+    io_type: 'p2p'
+    num: 2
+    bandwidth_per_io: 150.0e+9 # bytes/s
+    area_per_io: 5.0 # mm2
+    tdp_per_io: 0.25 # watts
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns
+    
+  # Overwrite the default values in constants
+  macs_density: 0.7 # mm2/TOPS, will override the default value in constants
+  w_per_tops: 0.36 # w/TOPS, will override the default value in constants
+
+Package:
+  num_chips: 1 # number of chips in a package
+  hbm:
+    # This defines one HBM stack
+    # HBM2e, 8 channels, 2 GB/channel, 2765/6 = 460.8 GB/s
+    - config: 'TPUv5p_HBM2e'
+      simulator: False
+      channel_bytes: 2147483648 # 2 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 3865470566 # to make the whole stack 460.8 GB/s
+      stack_cost: 120 # $ per stack
+
+Server:
+  num_lanes: 2
+  packages_per_lane: 2
+  thermal_eval: False # whether to evaluate the thermal
+  io:
+    # server to server I/O
+    io_type: 's2s'
+    num: 2
+    bandwidth_per_io: 150.0e+9 # bytes/s
+    tdp_per_io: 0.25 # watts
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns

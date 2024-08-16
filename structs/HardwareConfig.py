@@ -63,6 +63,7 @@ class ChipConfig(Base):
     chip_id = 0
     for cfg in self.all_configs:
       config = copy.deepcopy(cfg)
+      config.pop('core', None)
       config['constants'] = constants
       if 'chip_id' not in config:
         config['chip_id'] = chip_id
