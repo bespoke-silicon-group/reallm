@@ -5,6 +5,13 @@ from .Base import Base, TensorShape
 from .Mapping import Mapping
 from .IO import IO
 from .TCO import TCO
+from LLMCompass.design_space_exploration.dse import template_to_system, read_architecture_template
+from LLMCompass.software_model.transformer import (
+    TransformerBlockInitComputationTP,
+    TransformerBlockAutoRegressionTP,
+)
+from LLMCompass.software_model.utils import data_type_dict, Tensor
+from LLMCompass.hardware_model.device import Device
 import math
 
 if TYPE_CHECKING:
@@ -48,6 +55,12 @@ class Performance(Base):
         (https://arxiv.org/pdf/2207.00032.pdf)
         """
         self.asplos_version = self.system.asplos_version
+        if self.system.server.package.chip.dataflow == 'llmcompass':
+            self.llmcompass = True
+            hw_specs = read_architecture_template(f'outputs/{self.system.server.package.chip.chip_id}/llmcompass.json')
+            self.lc_system = template_to_system(hw_specs)
+        else:
+            self.llmcompass = False
         if self.update_on_init:
             if self.mapping.dynamic:
                 if self.mapping.sub_ctx_len < self.prefill_len + self.generate_len:
@@ -341,6 +354,7 @@ class Performance(Base):
         activation_col = d
         activation_size = activation_row * activation_col
 
+
         t_srv = self.system.num_servers / self.mapping.p # number of servers per pipeline stage
         t_pkg = self.system.server.num_packages * t_srv # number of packages per pipeline stage
         if t_srv > 1:
@@ -488,6 +502,52 @@ class Performance(Base):
         else:
             # Double check this
             fc_communication_latency = self._get_allreduce_latency(t, activation_size * data_bytes, collective_links, self.system.allreduce_algo)
+        
+        if self.llmcompass:
+            if self.system.model.act == 'gelu':
+                activation = 'gelu'
+            else:
+                activation = 'silu'
+            if stage == 'prefill':
+                lc_model = TransformerBlockInitComputationTP(
+                    d_model=d,
+                    n_heads=self.system.model.num_heads,
+                    device_count=t,
+                    data_type=data_type_dict["fp16"],
+                    activation=activation,
+                    d_ffn=d_ff,
+                    n_kv_heads=self.system.model.num_heads // self.system.model.heads_per_kv_cache,
+                    use_flash_attn=True
+                )
+                _ = lc_model(Tensor([micro_batch, self.prefill_len, d], data_type_dict["fp16"]))
+            else:
+                lc_model = TransformerBlockAutoRegressionTP(
+                    d_model=d,
+                    n_heads=self.system.model.num_heads,
+                    device_count=t,
+                    data_type=data_type_dict["fp16"],
+                    activation=activation,
+                    d_ffn=d_ff,
+                    n_kv_heads=self.system.model.num_heads // self.system.model.heads_per_kv_cache,
+                    use_flash_attn=True
+                )
+                _ = lc_model(Tensor([micro_batch, 1, d], data_type_dict["fp16"]), self.prefill_len + self.generate_len // 2)
+
+            latency = lc_model.compile_and_simulate(self.lc_system, 'heuristic-GPU-fast')
+            qkv_latency, q_mul_k_latency, a_mul_v_latency, h_matmul0_latency, h1_matmul1_latency, h2_matmul2_latency, h3_matmul3_latency, swi_mul_latency, softmax_latency, layernorm_latency, _, act_latency, allreduce_latency, _ = lc_model.simluate_log.split(", ")
+            atten_qkv_latency.time = float(qkv_latency)
+            atten_matmul1_latency.time = float(q_mul_k_latency)
+            atten_matmul2_latency.time = float(a_mul_v_latency)
+            atten_fc_latency.time = float(h_matmul0_latency)
+            fc1_latency.time = float(h1_matmul1_latency) + float(swi_mul_latency) + float(h3_matmul3_latency)
+            fc2_latency.time = float(h2_matmul2_latency)
+            softmax_latency = float(softmax_latency)
+            layernorm_latency = float(layernorm_latency)
+            act_latency = float(act_latency)
+        else:
+            softmax_latency = 0
+            layernorm_latency = 0
+            act_latency = 0
 
         micro_batch_latency = MicroBatchLatency(self.mapping.p, 
                                                 self.system.model.num_layers, 
@@ -500,7 +560,10 @@ class Performance(Base):
                                                 atten_communication_latency_2, 
                                                 fc1_latency, 
                                                 fc2_latency, 
-                                                fc_communication_latency)
+                                                fc_communication_latency,
+                                                softmax_latency,
+                                                layernorm_latency,
+                                                act_latency)
 
         return micro_batch_latency 
 
@@ -702,6 +765,12 @@ class MatmulLatency(Base):
             self.block_ldst_time = stacks * (self.J * self.K) * self.data_bytes / self.weight_bw
             self.time = max(self.block_comp_time, self.block_ldst_time)
             self.utilization = self.num_ops / (self.time * self.chip.perf)
+        elif self.dataflow == 'llmcompass':
+            self.num_ops = stacks * self.I * self.J * self.K * 2
+            self.block_comp_time = 0.0
+            self.block_ldst_time = 0.0
+            self.time = 0.0
+            self.utilization = 0.0
         else:
             raise NotImplementedError
 
@@ -752,6 +821,9 @@ class MicroBatchLatency(Base):
     fc1: MatmulLatency
     fc2: MatmulLatency
     fc_communication: float
+    softmax: float = 0.0
+    layernorm: float = 0.0
+    act: float = 0.0
 
     # derived metrics
     pipeline_stage: Optional[float] = None
@@ -776,7 +848,7 @@ class MicroBatchLatency(Base):
     communication_us: Optional[float] = None
 
     def update(self) -> None:
-        layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time
+        layer_compute = self.atten_qkv.time + self.atten_matmul1.time + self.atten_matmul2.time + self.atten_fc.time + self.fc1.time + self.fc2.time + self.softmax + self.layernorm + self.act
         layer_communication = self.atten_communication1 + self.atten_communication2 + self.fc_communication
         layers_per_stage = math.ceil(self.num_layers / self.p)
         self.pipeline_stage = (layer_compute + layer_communication) * layers_per_stage + self.stage2stage
@@ -799,6 +871,9 @@ class MicroBatchLatency(Base):
         self.total_us = self.total * 1e6
         self.compute_us = self.compute * 1e6
         self.communication_us = self.communication * 1e6
+        self.softmax_us = self.softmax * 1e6
+        self.layernorm_us = self.layernorm * 1e6
+        self.act_us = self.act * 1e6
 
 @dataclass
 class Energy(Base):
