@@ -1,0 +1,8 @@
+Model:
+  name: 'llama3-405B'
+  num_layers: 126
+  d: 16384
+  d_ff: 53284
+  num_heads: 128
+  heads_per_kv_cache: 16
+  act: 'swiglu'
