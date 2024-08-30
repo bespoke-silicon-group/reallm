@@ -38,7 +38,7 @@ def gen_llmcompass_config(cc_yaml: str, template_json: str):
 
     template_config['device']['memory_protocol'] = hbm['config']
 
-    template_config['device']['io']['global_buffer_MB'] = chip_config['sram'] / 1024 / 1024
+    template_config['device']['io']['global_buffer_MB'] = chip_config['sram'] / 1e6
     template_config['device']['io']['global_buffer_bandwidth_per_cycle_byte'] = chip_config['sram_bw'] / chip_config['freq']
     template_config['device']['io']['memory_channel_active_count'] = chip_config['hbm_channels'] // hbm['num_channels']
     template_config['device']['io']['pin_count_per_channel'] = hbm['channel_width'] * hbm['num_channels']

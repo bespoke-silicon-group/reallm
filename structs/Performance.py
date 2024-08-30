@@ -533,7 +533,7 @@ class Performance(Base):
                 )
                 _ = lc_model(Tensor([micro_batch, 1, d], data_type_dict["fp16"]), self.prefill_len + self.generate_len // 2)
 
-            latency = lc_model.compile_and_simulate(self.lc_system, 'heuristic-GPU-fast')
+            latency = lc_model.compile_and_simulate(self.lc_system, 'heuristic-GPU')
             qkv_latency, q_mul_k_latency, a_mul_v_latency, h_matmul0_latency, h1_matmul1_latency, h2_matmul2_latency, h3_matmul3_latency, swi_mul_latency, softmax_latency, layernorm_latency, _, act_latency, allreduce_latency, _ = lc_model.simluate_log.split(", ")
             atten_qkv_latency.time = float(qkv_latency)
             atten_matmul1_latency.time = float(q_mul_k_latency)
