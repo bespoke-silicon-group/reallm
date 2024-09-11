@@ -9,5 +9,5 @@ default_mapping:
   prefill_micro_batch: 0 
 
 workload:
-  max_batch: 1024
-  eval_len: [[256, 64], [64, 256]]
+  max_batch: 16
+  eval_len: [[65536, 65536]]
