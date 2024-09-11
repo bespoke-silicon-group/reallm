@@ -29,7 +29,7 @@ Chip:
     SRAM_KB: 256
 
 
-  pkg2pkg_io: # 300 GB/s per chip per direction
+  pkg2pkg_io:
     io_type: 'p2p'
     num: 18
     bandwidth_per_io: 50.0e+9
