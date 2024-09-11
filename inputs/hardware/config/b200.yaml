@@ -8,10 +8,10 @@ Chip:
   bytes_per_word: 2 # bfloat16 or fp16
 
   perf: 1125.0e+12 # 1125 TOPS
-  sram: 300.0e+6 # 300 MB
-  sram_bw: 2.0e+12 # 2 TB/s
+  sram: 125.0e+6 # 100 MB
+  sram_bw: 4.0e+12 # 4 TB/s
 
-  other_area: 70 # mm2
+  other_area: 80 # mm2
   core_area_ratio: 0.95
 
   hbm_channels: 32

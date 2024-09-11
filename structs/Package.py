@@ -44,6 +44,11 @@ class Package(Base):
     total_mem: Optional[int] = None # sram and dram, Byte
     dram_bw_per_chip: Optional[float] = None # Byte/sec
 
+    tops: Optional[float] = None
+    sram_mb: Optional[float] = None
+    dram_gb: Optional[float] = None
+    dram_bw_TB_per_sec: Optional[float] = None
+
     valid: Optional[bool] = None
     invalid_reason: Optional[str] = None
 
@@ -92,6 +97,10 @@ class Package(Base):
             self.dram = 0
             self.dram_bw_per_chip = 0
         self.total_mem = self.sram + self.dram
+        self.tops = self.num_chips * self.chip.tops
+        self.sram_mb = self.num_chips * self.chip.sram_mb
+        self.dram_gb = self.dram / 1e9
+        self.dram_bw_TB_per_sec = self.dram_bw_per_chip * self.num_chips / 1e12
         # print(f'Package {self.package_id}: {self.num_chips} chips, {self.num_hbm_stacks} HBM stacks, {self.perf/1e12} TFLOPS, {self.sram/1e6} MB SRAM, {self.dram/1024/1024/1024} GB DRAM, {self.dram_bw_per_chip/1024/1024/1024} GB/s DRAM BW per chip')
 
         self._update_dimension()
