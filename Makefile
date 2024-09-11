@@ -4,7 +4,8 @@ export MAGIC_NUMBERS_PATH = $(abspath ./vlsi_numbers)
 export MICRO_ARCH_PATH = $(abspath ./micro_arch_sim)
 export STRUCTS_PATH = $(abspath ./structs)
 export PLOT_SCRIPTS_PATH = $(abspath ./plot)
-export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH)
+export LLMCOMPASS_PATH = $(abspath ./LLMCompass)
+export PYTHONPATH := ${PYTHONPATH}:$(PLOT_SCRIPTS_PATH):$(STRUCTS_PATH):$(MAGIC_NUMBERS_PATH):$(MICRO_ARCH_PATH):$(LLMCOMPASS_PATH)
 
 HARDWARE := $(subst .yaml,,$(shell ls ./inputs/hardware/config))
 MODELS := $(subst .yaml,,$(shell ls ./inputs/software/model))
@@ -70,6 +71,8 @@ test: pyenv_exists
 	@make hw_example.clean
 	$(VENV_PYTHON3) main.py -hw $(HARDWARE_INPUT_DIR)/hw_example.yaml -m $(MODELS_INPUT_DIR)/gpt3.yaml -c $(CONSTANTS) -s $(SYS_CONFIG) -o $(OUTPUT_DIR)
 	$(VENV_PYTHON3) tests/compare.py --hardware hw_example --model gpt3
+	$(VENV_PYTHON3) main.py -hw $(HARDWARE_INPUT_DIR)/llmcompass_example.yaml -m $(MODELS_INPUT_DIR)/llama3-70B.yaml -c $(CONSTANTS) -s $(INPUT_DIR)/software/system/llmcompass_example.yaml  -o $(OUTPUT_DIR)
+	$(VENV_PYTHON3) tests/compare.py --hardware llmcompass_example --model llama3-70B
 
 # Clean all
 clean:

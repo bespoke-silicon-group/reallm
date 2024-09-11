@@ -1,0 +1,8 @@
+Model:
+  name: 'llama3-70B'
+  num_layers: 80
+  d: 8192
+  d_ff: 28672
+  num_heads: 64
+  heads_per_kv_cache: 8
+  act: 'swiglu'

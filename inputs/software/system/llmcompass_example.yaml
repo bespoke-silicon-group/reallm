@@ -1,0 +1,13 @@
+num_servers: 2
+allreduce_algo: '2d_ring'
+
+default_mapping:
+  t: 8
+  p: 1
+  # 0 means micro-batch = batch
+  micro_batch: 0 
+  prefill_micro_batch: 0 
+
+workload:
+  max_batch: 16
+  eval_len: [[65536, 65536]]

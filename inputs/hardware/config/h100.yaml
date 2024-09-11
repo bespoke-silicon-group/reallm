@@ -1,0 +1,67 @@
+Name: h100
+
+Chip:
+  chip_id: 'h100'
+  tech: '5nm'
+  dataflow: 'llmcompass' # 'roofline' for the roofline model, or 'WS' for weight-stationary
+                         # or 'llmcompass'
+  freq: 1.837e+9 # frequency, in Hz
+  bytes_per_word: 2 # bfloat16 or fp16
+
+  perf: 1000.0e+12 # 1000 TOPS
+  sram: 50.0e+6 
+  sram_bw: 9.405e+12 #
+
+  other_area: 70 # mm2
+  core_area_ratio: 0.95
+
+  hbm_channels: 40
+  mem_3d_vaults: 0
+
+  core:
+    core_count: 132
+    sublane_count: 4
+    sa_width: 32
+    sa_height: 16
+    vector_width: 32
+    vector_flop_per_cycle: 4
+    num_registers: 16384
+    SRAM_KB: 256
+
+
+  pkg2pkg_io:
+    io_type: 'p2p'
+    num: 18
+    bandwidth_per_io: 50.0e+9
+    area_per_io: 1.0 # ??
+    tdp_per_io: 0.25 # ??
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 8.92e-6 #
+
+  macs_density: 0.5 # mm2/TOPS
+  w_per_tops: 0.36 # w/TOPS
+
+Package:
+  num_chips: 1
+  hbm:
+    # HBM3e, 8 layers, 16 GB/layer, 5.76 Gb/s
+    - config: 'HBM3'
+      simulator: False
+      channel_bytes: 2147483648 # 2 GB
+      channel_width: 128
+      num_channels: 8
+      bit_rate: 5.76e+9
+      stack_cost: 120
+      pj_per_byte: 24 # 3 pJ/bit
+
+Server:
+  packages_per_lane: 2
+  num_lanes: 2
+  thermal_eval: False # whether to evaluate the thermal
+  io:
+    io_type: 's2s'
+    num: 18
+    bandwidth_per_io: 50.0e+9
+    tdp_per_io: 0.25 # 
+    pj_per_byte: 9.36 # GRS is 1.17pj/bit
+    init_time: 10.0e-9 # 10 ns

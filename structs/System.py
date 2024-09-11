@@ -83,6 +83,7 @@ class System(Base):
                 self.num_servers = math.ceil(self.max_tco / self.server.tco.total)
             self.total_mem = self.num_servers * self.server.total_mem
             if self.total_mem < self.model.model_size_byte:
+                self.invalid_reason = f'Total memory is {self.total_mem/1024/1024/1024} GB, which is less than the model size {self.model.model_size_byte/1024/1024/1024} GB.'
                 return False
         else:
             raise ValueError('Please provide one of kv_cache_ratio, max_ctx_len_batch_a, num_servers or max_tco.')

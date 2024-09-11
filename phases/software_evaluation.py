@@ -4,7 +4,7 @@ from typing import Optional
 from structs.Model import Model
 from structs.System import System
 from structs.HardwareConfig import expand_dict
-from utils.performance_dump import perf_to_csv
+from scripts.performance_dump import perf_to_csv
 
 def system_eval(config: dict, verbose: bool = False) -> Optional[System]:
     system = System(**config)
@@ -52,9 +52,11 @@ def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickl
 
     start_time = time.time()
     all_systems = []
-    num_cores = multiprocessing.cpu_count()
-    with multiprocessing.Pool(processes=num_cores) as pool:
-        all_systems = pool.starmap(system_eval, system_eval_args)
+    # num_cores = multiprocessing.cpu_count()
+    # with multiprocessing.Pool(processes=num_cores) as pool:
+        # all_systems = pool.starmap(system_eval, system_eval_args)
+    for arg in system_eval_args:
+        all_systems.append(system_eval(*arg))
     
     # Remove None values
     all_systems = [sys for sys in all_systems if sys is not None]
@@ -64,9 +66,8 @@ def software_evaluation(model_config: dict, sys_config: Optional[dict], hw_pickl
     result_pickle_path = f'{results_dir}/{hardware_name}/{model.name}.pkl'
     with open(result_pickle_path, 'wb') as f:
       pickle.dump(all_systems, f)
-    # comment out the performance dump for now 
-    # csv_path = f'{results_dir}/{hardware_name}/{model.name}.csv' 
-    # perf_to_csv(result_pickle_path, csv_path)
+    csv_path = f'{results_dir}/{hardware_name}/{model.name}.csv' 
+    perf_to_csv(result_pickle_path, csv_path)
     print(f'Finished evaluating {len(system_eval_args)} systems in {elapsed_time} seconds.')
 
 if __name__ == '__main__': 

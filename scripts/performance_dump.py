@@ -159,7 +159,7 @@ def perf_to_csv(result_pickle_path: str, csv_path: str):
         all_sys = pickle.load(f)
         eval_len_sys = split_sys(all_sys, 'eval_len')
 
-    target_batch = 32
+    target_batch = 8
     for opt_goal in ['prefill_lat', 'decoding_lat', 'tco']:
         for eval_len in eval_len_sys:
             max_batch = eval_len_sys[eval_len][0].max_batch
@@ -193,8 +193,13 @@ def perf_to_csv(result_pickle_path: str, csv_path: str):
                     else:
                         batch *= 2
                         continue
-                prefill_io, prefill_compute, prefill_mem = get_latency_breakdown(perf, 'prefill')
-                generate_io, generate_compute, generate_mem = get_latency_breakdown(perf, 'generate')
+                if perf.llmcompass:
+                    # TODO: add LLMCompass breakdown support
+                    prefill_io, prefill_compute, prefill_mem = 0, perf.prefill_latency, 0
+                    generate_io, generate_compute, generate_mem = 0, perf.generate_latency, 0
+                else:
+                    prefill_io, prefill_compute, prefill_mem = get_latency_breakdown(perf, 'prefill')
+                    generate_io, generate_compute, generate_mem = get_latency_breakdown(perf, 'generate')
                 tco_per_Mtoken, capex, opex = get_tco_breakdown(perf)
                 o_file.write(f'{opt_goal}, {eval_len}, {batch}, {perf.prefill_latency}, {perf.generate_latency}, {tco_per_Mtoken}, {prefill_io}, {prefill_compute}, {prefill_mem}, {generate_io}, {generate_compute}, {generate_mem}, {capex}, {opex}\n')
                 batch *= 2
