@@ -1,4 +1,4 @@
-from bsg.framework.Expr import *
+from framework.Expr import *
 from dataclasses import dataclass
 
 
@@ -13,6 +13,8 @@ class Gather( Expr ):
 
 @register_onnx( "Gather" )
 def from_onnx( node, kwargs ):
+    assert kwargs["axis"] in {None, 0}
+
     return Gather( id      = node.name
                  , Z       = kwargs["output"]
                  , A       = kwargs["data"]

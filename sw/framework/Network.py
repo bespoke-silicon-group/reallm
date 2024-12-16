@@ -1,10 +1,10 @@
-from bsg.framework.Expr import *
-from bsg.framework.operators import *
-from bsg.onnx.model_utils import *
+from framework.Expr import *
+from framework.operators import *
+from onnx_utils import *
 import onnx
 import os
 import pickle
-
+import numpy as np
 
 class Network:
 
@@ -185,8 +185,16 @@ class Network:
             io_args = { **E.get_inputs(), **E.get_output() }
             for arg,sym in io_args.items():
                 if sym is not None:
-                    self.add_tensors(Tensor(id=sym))
-                    self.connect_expr(T_id=sym, E_id=E.id, E_arg=arg)
+                    if isinstance(sym, List):
+                        # print(f"Warning: {E.id} has multiple {arg} tensors:")
+                        # print(f"\t{sym}")
+                        for s in sym:
+                            self.add_tensors(Tensor(id=s))
+                            self.connect_expr(T_id=s, E_id=E.id, E_arg=arg)
+                            # print(f"added tensor {s} to expr {E.id}")
+                    else:
+                        self.add_tensors(Tensor(id=sym))
+                        self.connect_expr(T_id=sym, E_id=E.id, E_arg=arg)
 
         return len(E_to_add) - skip_count
 
@@ -221,13 +229,23 @@ class Network:
         E = self.lookup_expr(E_id)
         T = self.lookup_tensor(T_id)
 
-        setattr(E, E_arg, T.id)
-
-        if E_arg in E.get_output():
-            self.srcnodes[T.id] = E.id
-
-        if E_arg in E.get_inputs():
+        # concat input A has multiple tensors
+        if E.type == "Concat" and E_arg == "A":
+            if hasattr(E, "A"):
+                if T.id not in E.A:
+                    E.A.append(T.id)
+            else:
+                E.A = [T.id]
             self.sinknodes[T.id].add(E.id)
+        else:
+
+            setattr(E, E_arg, T.id)
+
+            if E_arg in E.get_output():
+                self.srcnodes[T.id] = E.id
+
+            if E_arg in E.get_inputs():
+                self.sinknodes[T.id].add(E.id)
 
 
     def remove_inputs( self, T_to_remove ):
@@ -322,8 +340,12 @@ class Network:
             if E and E.id not in tracker:
                 tracker.add(E.id)
                 for expr_in_T_id in E.get_inputs().values():
-                    if expr_in_T_id is not None:
-                        yield from _recursive(expr_in_T_id)
+                    if isinstance(expr_in_T_id, list):
+                        for e in expr_in_T_id:
+                            yield from _recursive(e)
+                    else:
+                        if expr_in_T_id is not None:
+                            yield from _recursive(expr_in_T_id)
                 yield E
         for T_id in self.outputs:
             yield from _recursive(T_id)
@@ -351,20 +373,24 @@ class Network:
 
 
     @classmethod
-    def from_onnx( cls, filename ):
+    def from_onnx( cls, filename, load_external_data = True ):
         """
             Create a Network object from the given onnx file.
         """
         network = cls(os.path.splitext(os.path.basename(filename))[0])
-        onnx_model = onnx.load(filename)
+        onnx_model = onnx.load(filename, load_external_data=load_external_data)
         opset = get_model_opset(onnx_model)
 
         ### Add Param Exprs ###
         for tensor in onnx_model.graph.initializer:
+            if load_external_data:
+                value = get_tensor_np_data(tensor)
+            else:
+                value = np.ones(tensor.dims, dtype=dtype_onnx_to_np(tensor.data_type))
             network.add_exprs(
                 Param( id=f"PARAM-{tensor.name}"
                      , Z=tensor.name
-                     , value=get_tensor_np_data(tensor)
+                     , value=value
                      )
             )
 

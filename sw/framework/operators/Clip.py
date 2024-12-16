@@ -1,6 +1,6 @@
-from bsg.framework.Expr import *
+from framework.Expr import *
 from dataclasses import dataclass
-from bsg.framework.operators.Relu import Relu
+from framework.operators.Relu import Relu
 
 @dataclass
 class Clip( Expr ):

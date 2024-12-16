@@ -1,5 +1,5 @@
-from bsg.framework.operators import *
-from bsg.framework.Pattern import *
+from framework.operators import *
+from framework.Pattern import *
 import numpy as np
 
 

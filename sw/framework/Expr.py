@@ -67,6 +67,20 @@ class Expr:
            tensor symbol.
         """
         result = {}
+        # the input A of concat is a list of tensors
+        if self.type == "Concat":
+            tensor_sym = getattr(self, "A")
+            if symtable is None:
+                result["A"] = tensor_sym
+            else:
+                # tensor_sym is a list of tensor symbols
+                result["A"] = []
+                for t in tensor_sym:
+                    if t in symtable:
+                        result["A"].append(symtable[t])
+                    else:
+                        result["A"].append(None)
+            return result
         for f in fields(self):
             if "ArgIn" in str(f.type):
                 tensor_sym = getattr(self, f.name)

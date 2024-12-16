@@ -37,13 +37,13 @@ class Is( Pattern ):
                     return False
 
             ### attribute argumnet checking
-            elif arg in expr.attrs:
+            elif arg in expr.get_attrs():
                 if not func(getattr(expr, arg)):
                     return False
 
             ### currently don't support output matching
-            elif arg in expr.get_outputs():
-                raise RuntimeError("{arg} is an output of expr {expr} and cannot be pattern matched.")
+            elif arg in expr.get_output():
+                raise RuntimeError(f"{arg} is an output of expr {expr} and cannot be pattern matched.")
 
             ### unknown arg
             else:

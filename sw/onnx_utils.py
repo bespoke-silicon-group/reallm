@@ -555,6 +555,7 @@ def dtype_onnx_to_np(onnx_dtype: int) -> np.dtype:
         TensorProto.UINT32: np.dtype(np.uint32),
         TensorProto.UINT16: np.dtype(np.uint16),
         TensorProto.UINT8: np.dtype(np.uint8),
+        TensorProto.BOOL: np.dtype(bool),
     }[onnx_dtype]
 
 
@@ -579,6 +580,7 @@ def dtype_np_to_onnx(np_dtype: np.dtype) -> int:
         np.dtype(np.uint32): TensorProto.UINT32,
         np.dtype(np.uint16): TensorProto.UINT16,
         np.dtype(np.uint8): TensorProto.UINT8,
+        np.dtype(bool): TensorProto.BOOL,
     }[np_dtype]
 
 

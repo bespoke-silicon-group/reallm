@@ -1,5 +1,5 @@
-from bsg.framework.Expr import *
-from bsg.framework.operators.Transpose import Transpose
+from framework.Expr import *
+from framework.operators.Transpose import Transpose
 from dataclasses import dataclass
 
 
