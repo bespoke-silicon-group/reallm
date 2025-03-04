@@ -24,7 +24,12 @@ class ShapeInference:
                 print(f"A Source node: {srcnode}")
                 raise Exception(f"ShapeInference: {E.type} failed to infer shape. Inputs: {kwargs}")
             for out_arg, out_T_id in E.get_output().items():
-                self.alloc[out_T_id] = result
+                # Split operator has multiple outputs
+                if E.type == "Split":
+                    for i, split_T_id in enumerate(out_T_id):
+                        self.alloc[split_T_id] = result[i]
+                else:
+                    self.alloc[out_T_id] = result
             
     def run_symbolic( self, preset_in_dict = {} ):
 
@@ -312,6 +317,33 @@ class ShapeInference:
                 else:
                     output_tensor = self.network.lookup_tensor(E.output)
                     output_tensor.shape = self.scatternd(data_tensor.shape, indices_tensor.shape, updates_tensor.shape)
+            elif E.type == "Split":
+                if E.axis is None:
+                    axis = 0
+                else:
+                    axis = E.axis
+                split_tensor = self.network.lookup_tensor(E.split)
+                if hasattr(split_tensor, 'data'):
+                    print(f"Split {E.id} split {split_tensor.data}")
+                    split = split_tensor.data
+                    A_tensor = self.network.lookup_tensor(E.A)
+                    if hasattr(A_tensor, 'data'):
+                        A = A_tensor.data
+                        outputs = np.split(A, np.cumsum(split), axis=axis)
+                        for i, output_tensor_name in enumerate(E.Z):
+                            output_tensor = self.network.lookup_tensor(output_tensor_name)
+                            output_tensor.data = outputs[i]
+                            output_tensor.shape = outputs[i].shape
+                    else:
+                        for i, output_tensor_name in enumerate(E.Z):
+                            # print(f"Split {E.id} output {i} {output_tensor} shape depends on the values of split")
+                            output_tensor = self.network.lookup_tensor(output_tensor_name)
+                            tmp_shape = list(A_tensor.shape)
+                            tmp_shape[axis] = int(split[i])
+                            output_tensor.shape = tuple(tmp_shape)
+                else:
+                    # output shape depends on the values of split
+                    pass
             else:
                 inputs = {}
                 attrs = {}
@@ -503,7 +535,7 @@ class ShapeInference:
         results = []
         if isinstance(shape[0], str):
             # This shouldn't happen, return unknown shape for now
-            print(f'Warning: reshape shape {shape} is unknown')
+            # print(f'Warning: reshape shape {shape} is unknown')
             for _ in range(len(A)):
                 results.append('unk__' + str(self.unk_idx))
                 self.unk_idx += 1
@@ -646,6 +678,18 @@ class ShapeInference:
             self.unk_idx += 1
         return tuple(results)
     
+    def split( self, A, split, axis ):
+        # split is a 1D tensor, shape of split is the number of splits
+        all_results = []
+        for _ in range(split[0]):
+            results = list(A)
+            # results.append([f'unk__{self.unk_idx}'] * len(A))
+            results[axis] = f'unk__{self.unk_idx}'
+            self.unk_idx += 1
+            all_results.append(tuple(results))
+        return all_results
+    
+    
     def multidirectional_broadcast_with_unknown(self, *shapes):
         """
         Computes the resulting shape from multidirectional broadcasting of input shapes,
@@ -749,6 +793,7 @@ class ShapeInference:
         "Trilu"               :  trilu,
         "Where"               :  where,
         "Slice"               :  slice,
+        "Split"               :  split,
     }
 
 

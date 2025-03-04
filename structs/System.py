@@ -14,6 +14,7 @@ class System(Base):
     allreduce_algo: str = 'ring'
     sub_sys_num_servers: Optional[int] = None # or number of servers in each sub-system
     update_on_init: bool = True
+    sw_update_on_init: bool = True
 
     # optional inputs, but at least one of them should be provided, the other two will be derived
     num_servers: Optional[int] = None # number of servers
@@ -22,7 +23,8 @@ class System(Base):
     max_tco: Optional[float] = None # max TCO, running at TDP
     # optional inputs
     max_batch: int = 1024 # max batch size
-    eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
+    # eval_len: list[int] = field(default_factory=[128, 129]) # evaluation length for prefill and generate
+    eval_len: list[int] = None # evaluation length for prefill and generate 
     energy_model: bool = True # whether to use the energy model for calculating the TCO
     compute_perf_efficiency: float = 1.0 # the ratio of the actual compute performance to the theoretical performance
     io_bandwidth_efficiency: float = 1.0 # the ratio of the actual IO bandwidth to the theoretical bandwidth
@@ -53,7 +55,7 @@ class System(Base):
     def update(self) -> None:
         if self.update_on_init:
             self.valid = self._hardware_update()
-            if self.valid:
+            if self.valid and self.sw_update_on_init:
                 self._software_update()
 
     def get_perf(self, prefill_len, generate_len) -> Performance:
@@ -123,6 +125,8 @@ class System(Base):
         return True
 
     def _software_update(self) -> None:
+        if self.eval_len == None:
+            self.eval_len = [128, 129]
         prefill_len = self.eval_len[0]
         generate_len = self.eval_len[1]
         total_len = prefill_len + generate_len

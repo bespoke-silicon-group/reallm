@@ -237,6 +237,14 @@ class Network:
             else:
                 E.A = [T.id]
             self.sinknodes[T.id].add(E.id)
+        # split output Z has multiple tensors
+        elif E.type == "Split" and E_arg == "Z":
+            if hasattr(E, "Z"):
+                if T.id not in E.Z:
+                    E.Z.append(T.id)
+            else:
+                E.Z = [T.id]
+            self.srcnodes[T.id] = E.id
         else:
 
             setattr(E, E_arg, T.id)
@@ -412,3 +420,64 @@ class Network:
 
         return network
 
+    @classmethod
+    def from_onnx_partition( cls, filename, T, P, C,
+                            load_external_data = True ):
+        """
+            Create a Network object from the given onnx file,
+            each operator is partitioned based on parallelisms.
+            T: tensor parallelism
+            P: pipeline parallelism
+            C: context parallelism
+        """
+        network = cls(os.path.splitext(os.path.basename(filename))[0])
+        onnx_model = onnx.load(filename, load_external_data=load_external_data)
+        opset = get_model_opset(onnx_model)
+
+        ### Add Param Exprs ###
+        for tensor in onnx_model.graph.initializer:
+            if load_external_data:
+                value = get_tensor_np_data(tensor)
+            else:
+                value = np.ones(tensor.dims, dtype=dtype_onnx_to_np(tensor.data_type))
+            
+            # partition the weight tensor based on tensor parallelism
+            if 'weight' in tensor.name:
+                if 'qkv' in tensor.name:
+                    # qkv projection weight, split on the last dimension
+                    value = np.split(value, T, axis=-1)[0]
+                elif 'attn' in tensor.name:
+                    # attention output projection weight, split on the first dimension
+                    value = np.split(value, T, axis=0)[0]
+                elif 'ffn1' in tensor.name:
+                    # FFN layer 1 weight, split on the last dimension
+                    value = np.split(value, T, axis=-1)[0]
+                elif 'ffn2' in tensor.name:
+                    # FFN layer 2 weight, split on the first dimension
+                    value = np.split(value, T, axis=0)[0]
+            elif 'split' in tensor.name:
+                value = value / T
+            network.add_exprs(
+                Param( id=f"PARAM-{tensor.name}"
+                     , Z=tensor.name
+                     , value=value
+                     )
+            )
+
+        ### Add All Other Exprs ###
+        for node in onnx_model.graph.node:
+            func = get_onnx_node_expr(node)
+            expr = func(node, get_node_kwargs(node, opset))
+            network.add_exprs(expr)
+
+        ### Set Inputs ###
+        initializer_names = [T.name for T in onnx_model.graph.initializer]
+        for T in onnx_model.graph.input:
+            if T.name not in initializer_names:
+                network.add_inputs(network.lookup_tensor(T.name))
+
+        ### Set Outputs ###
+        for T in onnx_model.graph.output:
+            network.add_outputs(network.lookup_tensor(T.name))
+
+        return network

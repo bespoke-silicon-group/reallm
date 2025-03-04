@@ -6,6 +6,7 @@ from .Base import Base
 class Mapping(Base):
     t: int = 1 # tensor parallelism size, number of chips per pipeline stage
     p: int = 1 # pipeline paralelism size
+    c: int = 1 # context parallelism size
     micro_batch: int = 1 # micro batch size
     prefill_micro_batch: int = 1 # micro batch size for prefill
 
