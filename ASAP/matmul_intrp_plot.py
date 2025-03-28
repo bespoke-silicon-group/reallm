@@ -36,7 +36,10 @@ else:
 
 M = 8
 K = 128
-Ns = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+Ns = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+# Ns = [2, 4, 8, 16, 
+    #   24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3084, 4096, 6144, 8192, 
+    #   16384, 32768, 65536, 131072]
 Ns_lat = []
 for N in Ns:
     matmul_size = (M, K, N)
@@ -80,7 +83,10 @@ for N in Ns:
 
 M = 128
 N = 512
-Ks = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+Ks = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+# Ks = [2, 4, 8, 16, 
+    #   24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3084, 4096, 6144, 8192, 
+    #   16384, 32768, 65536, 131072]
 Ks_lat = []
 for K in Ks:
     matmul_size = (M, K, N)
@@ -131,7 +137,7 @@ from scipy.interpolate import interp1d
 
 # 2x2 plot: top: Ns, bottom: Ks
 # left: interpolation, right: error comparison
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+fig, axes = plt.subplots(2, 2, figsize=(7, 5.2))
 
 for i, (Xs, all_lat, title) in enumerate([(Ns, Ns_lat, "N"), (Ks, Ks_lat, "K")]):
     # Example simulation data (Replace with your actual measured latencies)
@@ -148,19 +154,20 @@ for i, (Xs, all_lat, title) in enumerate([(Ns, Ns_lat, "N"), (Ks, Ks_lat, "K")])
     poly_func = np.poly1d(poly_coeffs)  # Create polynomial function
 
     # Define new N values for estimation
-    N_interp = np.linspace(values[0], values[-1], 2000)
+    N_interp = np.linspace(values[0], values[-1], 20000)
     latency_linear = linear_interp(N_interp)
     latency_poly = poly_func(N_interp)
 
     # Compare predictions at intermediate values
     # generate 10 random values for N
-    np.random.seed(0)
-    test_points = []
-    for j in range(1, len(values) - 1):
-        new_test_points = (np.random.choice(range(values[j], values[j + 1]), 1, replace=False))
-        for test_point in new_test_points:
-            test_points.append(test_point)
-    test_points = sorted(test_points)
+    # np.random.seed(0)
+    # test_points = []
+    # for j in range(1, len(values) - 1):
+    #     new_test_points = (np.random.choice(range(values[j], values[j + 1]), 1, replace=False))
+    #     for test_point in new_test_points:
+    #         test_points.append(test_point)
+    # test_points = sorted(test_points)
+    test_points = [10, 21, 55, 74, 176, 494, 569, 1792, 3742, 6703, 13306, 25073, 52077, 74614]
     simulated_latencies = []
     simulated_matmul_sizes = []
     if i == 0:
@@ -182,7 +189,6 @@ for i, (Xs, all_lat, title) in enumerate([(Ns, Ns_lat, "N"), (Ks, Ks_lat, "K")])
                 if B_str == '1' and float(M_str) == matmul_size[0] and float(K_str) == matmul_size[1] and float(N_str) == matmul_size[2]:
                     simulated_latencies.append(float(lat))
                     f.close()
-                    print(f'Skipping Matmul Size {matmul_size}')
                     break
         else:
             M, K, N = matmul_size
@@ -190,6 +196,10 @@ for i, (Xs, all_lat, title) in enumerate([(Ns, Ns_lat, "N"), (Ks, Ks_lat, "K")])
             input1 = Tensor([M, K], data_type)
             input2 = Tensor([K, N], data_type)
             _ = mm(input1, input2)
+            if i == 0:
+                compile_mode = 'heuristic-GPU'
+            else:
+                compile_mode = 'exhaustive'
             lat = mm.compile_and_simulate(device, compile_mode)
             simulated_latencies.append(lat)
             with open(out_file, 'a') as f:
@@ -201,29 +211,44 @@ for i, (Xs, all_lat, title) in enumerate([(Ns, Ns_lat, "N"), (Ks, Ks_lat, "K")])
     # Compute absolute errors
     error_linear = np.abs(predicted_linear - simulated_latencies) / simulated_latencies
     error_poly = np.abs(predicted_poly - simulated_latencies) / simulated_latencies
-
     # Two Plots: left: interpolations, right: error comparison
     ax1 = axes[i][0]
-    ax1.scatter(values, latencies, color='red', label="Simulated Data")
-    ax1.plot(N_interp, latency_linear, label="Linear Interpolation", linestyle="dashed")
-    ax1.plot(N_interp, latency_poly, label=f"Polynomial Interpolation (Degree {degree})", linestyle="dashdot")
-    ax1.set_xlabel("N (Matrix Dimension)")
-    ax1.set_ylabel("Latency (ms)")
+    ax1.scatter(values, latencies, color='red', label="Simulated Data",
+                s=20)  # Plot simulated
+    ax1.plot(N_interp, latency_linear, label="Linear Interp", linestyle="dashed", color='tab:green')
+    ax1.plot(N_interp, latency_poly, label=f"Polynomial Interp", linestyle="dashdot", color='tab:orange')
+    ax1.set_ylabel("Latency (s)")
     ax1.set_xscale("log")
     ax1.set_yscale("log")
-    ax1.set_title("Linear vs. Polynomial Interpolation for MatMul Latency")
+    if i == 0:
+        ax1.set_title("MatMul Latency Interpolation")
+        ax1.set_xlabel("N (M=8, K=128)")
+    else:
+        ax1.set_xlabel("K (M=128, N=512)")
     ax1.legend()
     ax1.grid(True)
 
     ax2 = axes[i][1]
-    ax2.bar(test_points, error_linear, width=100, color='blue', alpha=0.7, label="Linear Interpolation")
-    ax2.bar(test_points, error_poly, width=100, color='green', alpha=0.7, label=f"Polynomial Interpolation (Degree {degree})")
-    ax2.set_xlabel("N (Matrix Dimension)")
+    error_linear = error_linear[2:]
+    error_poly = error_poly[2:]
+    test_points = test_points[2:]
+    average_error_linear = np.mean(error_linear)
+    average_error_poly = np.mean(error_poly)
+    ax2.scatter(test_points, error_linear, color='tab:green', label="Linear (Avg Error: {:.2f}%)".format(average_error_linear * 100), s=10)
+    ax2.scatter(test_points, error_poly, color='tab:orange', label=f"Polynomial (Avg Error: {average_error_poly * 100:.2f}%)", s=10)
     ax2.set_ylabel("Relative Error")
-    ax2.set_title("Prediction Error Comparison")
+    if i == 0:
+        ax2.set_title("Prediction Error Comparison")
+        ax2.set_xlabel("N (M=8, K=128)")
+    else:
+        ax2.set_xlabel("K (M=128, N=512)")
+    ax2.set_xscale("log")
     ax2.legend()
     ax2.grid(True)
 
-
+# save to pdf
+plt.tight_layout()
+plt.savefig('matmul_lat_interp.pdf')
 # %%
-
+print(linear_interp(Xs))
+print(latencies)
