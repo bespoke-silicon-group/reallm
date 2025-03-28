@@ -85,7 +85,7 @@ class HardwareSim:
         self.kernels_perf = []
         self.accept_new_request = True
     
-    def run(self, sim_kernel: SimKernel) -> tuple:
+    def run(self, sim_kernel: SimKernel, exp_dist = None) -> tuple:
         hw_flops = self.hardware.flops
         hw_mem_bw = self.hardware.mem_bw
         hw_mem_size = self.hardware.mem_size
@@ -144,17 +144,11 @@ class HardwareSim:
                 raise ValueError(f"Prefill len {prefill_len} > 0 and decode lens {decode_lens} > 0 in continuous scheduler")
             
 
-            if self.scheduler_algo == 'baseline':
-                # prefill_kernel_sizes = model.get_kernel_sizes(prefill_len, [], parallelism)
-                # decode_kernel_sizes = model.get_kernel_sizes(0, decode_lens, parallelism)
-                # latency = find_kernel_latency(hw_name, prefill_kernel_sizes) + find_kernel_latency(hw_name, decode_kernel_sizes)
-                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
-                latency = find_kernel_latency(hw_name, kernel_sizes)
-            elif 'continuous' in self.scheduler_algo or 'mixed-sarathi' in self.scheduler_algo:
-                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
-                latency = find_kernel_latency(hw_name, kernel_sizes)
+            if hasattr(model, 'n_routed_exp'):
+                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism, exp_dist)
             else:
-                raise ValueError(f"Unknown scheduler algorithm {self.scheduler_algo}")
+                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
+            latency = find_kernel_latency(hw_name, kernel_sizes)
             
             # Add IO latency
             E, T, P, C = parallelism
@@ -193,7 +187,6 @@ def find_kernel_latency(hw_name, kernel_sizes):
     for kernel_type in kernel_sizes.keys():
         csv_file = f'kernel_lib/{hw_name}_{kernel_type}_lat.csv'
         lat = batch_interpolate_latency(csv_file, kernel_sizes[kernel_type].kernel_sizes)
-        # print(f"{kernel_type} latency: {lat:.3e} s")
         total_latency += lat
     return  total_latency
 

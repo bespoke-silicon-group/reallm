@@ -9,6 +9,7 @@ from model import Model
 from task import PrefillTask, DecodeTask
 import pickle
 import os
+import numpy as np
 # import utils
 
 class Simulator:
@@ -20,6 +21,7 @@ class Simulator:
                  end_time: int,
                  start_reqs: int,
                  end_reqs: int,
+                 exp_dist_path: str = None,
                  result_dir: str = 'results'
                  ):
         self.model = model
@@ -41,6 +43,11 @@ class Simulator:
         logging.info(f"TraceSimulator initialized for trace {trace} with scheduler {hardware_sim.scheduler_algo}")
 
         self.load_trace()
+
+        if exp_dist_path is not None:
+            self.exp_distribution = np.load(exp_dist_path)
+        else:
+            self.exp_distribution = None
 
     def load_trace(self):
         """
@@ -74,7 +81,10 @@ class Simulator:
         """
         kernel, new_time = self.scheduler.run(self.time, self.prefill_fifo, self.decode_fifo, self.accept_new_req)
         self.time = new_time
-        latency, accept_new_req = self.hardware_sim.run(kernel)
+        if self.exp_distribution is not None:
+            latency, accept_new_req = self.hardware_sim.run(kernel, self.exp_distribution)
+        else:
+            latency, accept_new_req = self.hardware_sim.run(kernel)
         self.accept_new_req = accept_new_req
         self.time += latency
 

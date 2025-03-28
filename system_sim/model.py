@@ -3,6 +3,7 @@ from typing import Optional, List
 from base import Base
 from collections import Counter
 import math
+import numpy as np
 
 @dataclass
 class Model(Base):
@@ -196,7 +197,7 @@ class deepseek:
         self.sparse_layers = self.layers - self.dense_layers
 
     def get_kernel_sizes(self, prefill_len: int, decode_lens: List[int],
-                            parallelism = (1, 1, 1, 1)):
+                            parallelism = (1, 1, 1, 1), exp_distribution = None):
         E, T, P, C = parallelism
         all_kernel_sizes = dict()
         for kernel_type in eval_kernel_types:
@@ -264,10 +265,21 @@ class deepseek:
             all_kernel_sizes['layernorm'].add_kernel(fc_len, self.d_model)
 
             # routed_exp FF1 and FF3: (fc_len, d_model) * (d_model, d_exp * n_routed_exp) = (fc_len, d_exp * n_routed_exp)
-            if E >= 8:
-                activated_exp = 1
+            if exp_distribution is None:
+                if E >= 8:
+                    activated_exp = 1
+                else:
+                    activated_exp = self.n_activated_exp
             else:
-                activated_exp = self.n_activated_exp
+                expert_ids = np.arange(self.n_routed_exp)
+                activated = np.random.choice(expert_ids, size=self.n_activated_exp, replace=False, p=exp_distribution)
+                activations_per_node = [0] * E
+                for expert_id in activated:
+                    node_id = expert_id // (self.n_routed_exp // E)
+                    activations_per_node[node_id] += 1
+                max_activated_per_node = max(activations_per_node)
+                activated_exp = max_activated_per_node
+
             all_kernel_sizes['matmul'].add_kernel(fc_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
             all_kernel_sizes['matmul'].add_kernel(fc_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
             all_kernel_sizes['mul'].add_kernel(fc_len,  math.ceil(self.d_exp * activated_exp / T))
