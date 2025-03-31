@@ -198,6 +198,9 @@ class deepseek:
 
     def get_kernel_sizes(self, prefill_len: int, decode_lens: List[int],
                             parallelism = (1, 1, 1, 1), exp_distribution = None):
+        if exp_distribution is None:
+            # uniform distribution
+            exp_distribution = [1/self.n_routed_exp] * self.n_routed_exp
         E, T, P, C = parallelism
         all_kernel_sizes = dict()
         for kernel_type in eval_kernel_types:
@@ -264,30 +267,58 @@ class deepseek:
             all_kernel_sizes['matmul'].add_kernel(fc_len, math.ceil(self.d_exp * self.n_shared_exp / T), self.d_model)
             all_kernel_sizes['layernorm'].add_kernel(fc_len, self.d_model)
 
-            # routed_exp FF1 and FF3: (fc_len, d_model) * (d_model, d_exp * n_routed_exp) = (fc_len, d_exp * n_routed_exp)
-            if exp_distribution is None:
-                if E >= 8:
-                    activated_exp = 1
-                else:
-                    activated_exp = self.n_activated_exp
-            else:
+            # routed_exp 
+            def sample_activated_experts(batch_size):
                 expert_ids = np.arange(self.n_routed_exp)
-                activated = np.random.choice(expert_ids, size=self.n_activated_exp, replace=False, p=exp_distribution)
+                experts_activations = {k: 0 for k in range(self.n_routed_exp)}
+                for _ in range(batch_size):
+                    activated = np.random.choice(expert_ids, size=self.n_activated_exp, replace=False, p=exp_distribution)
+                    for expert_id in activated:
+                        experts_activations[expert_id] += 1
+                return experts_activations
+
+            def get_expert_activation_per_node(experts_activations):
                 activations_per_node = [0] * E
-                for expert_id in activated:
+                for expert_id, count in experts_activations.items():
                     node_id = expert_id // (self.n_routed_exp // E)
-                    activations_per_node[node_id] += 1
+                    activations_per_node[node_id] += count
+                return activations_per_node
+
+            if prefill_len > 0:
+                expert_activations = sample_activated_experts(1)
+                activations_per_node = get_expert_activation_per_node(expert_activations)
                 max_activated_per_node = max(activations_per_node)
                 activated_exp = max_activated_per_node
 
-            all_kernel_sizes['matmul'].add_kernel(fc_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
-            all_kernel_sizes['matmul'].add_kernel(fc_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
-            all_kernel_sizes['mul'].add_kernel(fc_len,  math.ceil(self.d_exp * activated_exp / T))
-            all_kernel_sizes['silu'].add_kernel(fc_len, math.ceil(self.d_exp * activated_exp / T))
-            # routed_exp FF2: (fc_len, d_exp * activated_exp) * (d_exp * activated_exp, d_model) = (fc_len, d_model)
-            all_kernel_sizes['matmul'].add_kernel(fc_len, math.ceil(self.d_exp * activated_exp / T), self.d_model)
-            all_kernel_sizes['layernorm'].add_kernel(fc_len, self.d_model)
-
+                # FF1 and FF3: (fc_len, d_model) * (d_model, d_exp * n_routed_exp) = (fc_len, d_exp * n_routed_exp)
+                all_kernel_sizes['matmul'].add_kernel(prefill_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
+                all_kernel_sizes['matmul'].add_kernel(prefill_len, self.d_model, math.ceil(self.d_exp * activated_exp / T))
+                all_kernel_sizes['mul'].add_kernel(prefill_len,  math.ceil(self.d_exp * activated_exp / T))
+                all_kernel_sizes['silu'].add_kernel(prefill_len, math.ceil(self.d_exp * activated_exp / T))
+                # routed_exp FF2: (fc_len, d_exp * activated_exp) * (d_exp * activated_exp, d_model) = (fc_len, d_model)
+                all_kernel_sizes['matmul'].add_kernel(prefill_len, math.ceil(self.d_exp * activated_exp / T), self.d_model)
+                all_kernel_sizes['layernorm'].add_kernel(prefill_len, self.d_model)
+            elif len(decode_lens) > 0:
+                expert_activations = sample_activated_experts(len(decode_lens))
+                activations_per_node = get_expert_activation_per_node(expert_activations)
+                # It's non-trivial to determine which node is the critical path, now we just assume the one with the most expert activations
+                # This might not be true. For example, one node has the most expert activations but all of them are for the same expert, while another node has less expert activations but they are for different experts. The latter might have longer latency due to the more memory accesses.
+                critical_node = activations_per_node.index(max(activations_per_node))
+                expert_id_start = critical_node * (self.n_routed_exp // E)
+                expert_id_end = expert_id_start + (self.n_routed_exp // E) - 1
+                for expert_id in range(expert_id_start, expert_id_end + 1):
+                    activated_times = expert_activations[expert_id]
+                    if activated_times == 0:
+                        continue
+                    # FF1 and FF3: (fc_len, d_model) * (d_model, d_exp * n_routed_exp) = (fc_len, d_exp * n_routed_exp)
+                    all_kernel_sizes['matmul'].add_kernel(activated_times, self.d_model, math.ceil(self.d_exp / T))
+                    all_kernel_sizes['matmul'].add_kernel(activated_times, self.d_model, math.ceil(self.d_exp / T))
+                    all_kernel_sizes['mul'].add_kernel(activated_times,  math.ceil(self.d_exp / T))
+                    all_kernel_sizes['silu'].add_kernel(activated_times, math.ceil(self.d_exp / T))
+                    # routed_exp FF2: (fc_len, d_exp * activated_exp) * (d_exp * activated_exp, d_model) = (fc_len, d_model)
+                    all_kernel_sizes['matmul'].add_kernel(activated_times, math.ceil(self.d_exp / T), self.d_model)
+                    all_kernel_sizes['layernorm'].add_kernel(activated_times, self.d_model)
+                
         # Output layer
         # (fc_len, d_model) * (d_model, vocab_size) = (fc_len, vocab_size)
         # all_kernel_sizes['matmul'].add_kernel(fc_len, math.ceil(self.d_model / T), self.vocab_size)

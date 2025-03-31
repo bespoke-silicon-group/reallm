@@ -82,7 +82,7 @@ class HardwareSim:
         self.scheduler_algo = scheduler_algo
         self.max_ctx_len = max_ctx_len
 
-        self.kernels_perf = []
+        self.task_sizes = []
         self.accept_new_request = True
     
     def run(self, sim_kernel: SimKernel, exp_dist = None) -> tuple:
@@ -143,6 +143,9 @@ class HardwareSim:
             if prefill_len > 0 and len(decode_lens) > 0 and self.scheduler_algo == 'continuous':
                 raise ValueError(f"Prefill len {prefill_len} > 0 and decode lens {decode_lens} > 0 in continuous scheduler")
             
+
+            # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}")
+            self.task_sizes.append((prefill_len, decode_lens))
 
             if hasattr(model, 'n_routed_exp'):
                 kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism, exp_dist)

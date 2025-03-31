@@ -131,10 +131,10 @@ class Simulator:
                         logging.info(f"Request {req_id} did not finish")
                         break
         # Dump the kernel performance to a pickle file
-        # kernel_perf = self.hardware_sim.kernels_perf 
-        # file_name = f"{self.result_dir}/{model_name}/{workload_name}/{hw_name}/kernel_perf.pkl"
-        # with open(file_name, "wb") as f:
-        #     pickle.dump(kernel_perf, f)
+        task_sizes = self.hardware_sim.task_sizes
+        file_name = f"{self.result_dir}/{model_name}/{workload_name}/{hw_name}/task_sizes.pkl"
+        with open(file_name, "wb") as f:
+            pickle.dump(task_sizes, f)
 
         # logging.info("========================================")
         # logging.info("Simulation results:")
