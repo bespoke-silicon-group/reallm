@@ -188,7 +188,7 @@ class HardwareSim:
 def find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes):
     total_latency = 0
     for kernel_type in kernel_sizes.keys():
-        csv_file = os.path.join(kernel_lib_path, f'{hw_name}_{kernel_type}_lat.csv')
+        csv_file = os.path.join(kernel_lib_path, f'{hw_name}_{kernel_type}_latency.csv')
         lat = batch_interpolate_latency(csv_file, kernel_sizes[kernel_type].kernel_sizes)
         total_latency += lat
     return  total_latency

@@ -26,7 +26,7 @@ gen_kernel_sizes(model, num_nodes, output_dir=kernel_lib_dir,
 # Kernel Simulation
 hardware_llmcompass_json = 'LLMCompass/configs/GA100.json'
 kernel_perf_sim(hardware_llmcompass_json, kernel_lib_dir,
-                eval_kernel_types=['softmax', 'layernorm', 'mul', 'silu'],
+                eval_kernel_types=['matmul', 'softmax', 'layernorm', 'mul', 'silu'],
                 compile_mode='heuristic-GPU')
 
 # %%
@@ -72,8 +72,9 @@ print("Generated traces at different request rates")
 # Run System Simulation
 trace_file = os.path.join(trace_data_dir, 'rr_code_1.csv')
 run_system_sim(model, trace_file, 
-               hw_node_name='H100', num_nodes=num_nodes,
+               hw_node_name='GA100', num_nodes=num_nodes,
                parallelism=(1, 8, 1, 1), io_algo='multishot',
                 scheduler_algo='mixed-sarathi', prefill_chunk=2048,
                 workspace_dir=workspace_dir,
+                end_reqs=2,
 )
