@@ -2,7 +2,7 @@ from simulator import Simulator
 from hardware_sim import HardwareSim
 from hardware import Hardware, H100, Our_3D, System_Num_Nodes
 from scheduler import Scheduler
-from model import Model, llama405, llama70, opt175
+from simulator.base.model import Model, llama405, llama70, opt175
 from typing import List, Optional
 import os
 import logging

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ReaLLM</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'neutral',
+        });
+    </script>
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+        }
+        .left-panel {
+            width: 15%;
+            padding: 20px;
+            border-right: 1px solid #ccc;
+        }
+        .right-panel {
+            flex: 1;
+            padding: 20px;
+        }
+        label, input, select {
+            display: block;
+            margin-bottom: 10px;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .mermaid {
+        margin-top: 1rem;
+        }
+        #hover-info {
+        display: none;
+        position: absolute;
+        background: #fefefe;
+        border: 1px solid #000000;
+        padding: 0px;
+        width: 280px;
+        font-size: 0.9em;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+        transition: opacity 0.2s ease;
+        }
+        #hover-info h4 {
+        margin: 0;
+        display: inline-block;
+        }
+        #hover-header {
+        cursor: move;
+        background: #787878;
+        color: white;
+        padding: 6px 10px;
+        font-weight: bold;
+        border-bottom: 1px solid #005bbb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        }
+        #hover-header h4 {
+        margin: 0;
+        font-size: 1em;
+        }
+        #close-panel {
+        border: none;
+        background: none;
+        font-size: 1.2em;
+        color: white;
+        cursor: pointer;
+        padding: 0;
+        }
+        .node.hovered rect,
+        .node.hovered polygon,
+        .node.hovered ellipse {
+        stroke: #0077ff !important;
+        stroke-width: 3px !important;
+        fill: #eef7ff !important;
+        }
+    </style>
+
+    <script>
+        function updateExpertField() {
+            const model = document.getElementById("model").value;
+            const expertField = document.getElementById("expert-parallel");
+            if (model === "deepseekv2") {
+                expertField.style.display = "block";
+            } else {
+                expertField.style.display = "none";
+            }
+        }
+    </script>
+
+</head>
+<body>
+    <div class="left-panel">
+        <h2>System Configuration</h2>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="post">
+            <label for="model">Model:</label>
+            <select name="model" id="model" onchange="updateExpertField()">
+                <option value="llama70b" {% if request.form.get('model') == 'llama70b' %}selected{% endif %}>LLaMA3-70B</option>
+                <!-- <option value="deepseekv2" {% if request.form.get('model') == 'deepseekv2' %}selected{% endif %}>DeepSeekV2</option> -->
+            </select>
+
+            <label># Devices:</label>
+            <input type="number" name="devices" required value="{{ request.form.get('devices') or '' }}">
+
+            <label>Data Parallelism:</label>
+            <input type="number" name="data_parallel" value="{{ request.form.get('data_parallel') or 1 }}">
+
+            <label>Tensor Parallelism:</label>
+            <input type="number" name="tensor_parallel" value="{{ request.form.get('tensor_parallel') or 1 }}">
+
+            <label>Pipeline Parallelism:</label>
+            <input type="number" name="pipeline_parallel" value="{{ request.form.get('pipeline_parallel') or 1 }}">
+
+            <label>Context Parallelism:</label>
+            <input type="number" name="context_parallel" value="{{ request.form.get('context_parallel') or 1 }}">
+
+            {% if request.form.get('model') == 'deepseekv2' %}
+                <div id="expert-parallel">
+                    <label>Expert Parallelism:</label>
+                    <input type="number" name="expert_parallel" value="{{ request.form.get('expert_parallel') or 1 }}">
+                </div>
+            {% else %}
+                <div id="expert-parallel" style="display: none;">
+                    <label>Expert Parallelism:</label>
+                    <input type="number" name="expert_parallel" value="1">
+                </div>
+            {% endif %}
+
+            <hr>
+
+            <label>Prefill Length:</label>
+            <input type="number" name="prefill_length" value="{{ request.form.get('prefill_length') or 0 }}">
+
+            <label>Num Decode Tasks:</label>
+            <input type="number" name="num_decode_tasks" value="{{ request.form.get('num_decode_tasks') or 0 }}">
+
+            <label>Decode Task Contex Length:</label>
+            <input type="number" name="decode_task_context_length" value="{{ request.form.get('decode_task_context_length') or 1 }}">
+
+            <!-- <label><input type="radio" name="decode_mode" value="manual"
+                {% if request.form.get('decode_mode') != 'repeat' %}checked{% endif %}>
+                Manual </label>
+            <input type="text" name="decode_manual" placeholder="e.g. 8,16,32"
+                   value="{{ request.form.get('decode_manual') or '' }}">
+            
+            <label><input type="radio" name="decode_mode" value="repeat"
+                {% if request.form.get('decode_mode') == 'repeat' %}checked{% endif %}>
+                Repeat:</label>
+            <label>Count:</label>
+            <input type="number" name="decode_repeat_count"
+                   value="{{ request.form.get('decode_repeat_count') or '' }}">
+            <label>Value:</label>
+            <input type="number" name="decode_repeat_value" value="{{ request.form.get('decode_repeat_value') or '' }}"> -->
+
+            <br>
+            <input type="submit" value="Visualize">
+        </form>
+    </div>
+
+    <div class="right-panel">
+        <h2>One Layer</h2>
+        <div style="display: flex; gap: 30px;">
+            <div class="mermaid" style="flex: 3;">
+                {% if mermaid_code %}
+                    {{ mermaid_code }}
+                {% endif %}
+            </div>
+
+            <div id="hover-info">
+                <!-- <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <h4 id="hover-name">Op Info</h4>
+                  <button id="close-panel">×</button>
+                </div> -->
+                <div id="hover-header" style="cursor: move; display: flex; justify-content: space-between;">
+                    <h4 id="hover-name">Op Info</h4>
+                    <button id="close-panel">×</button>
+                  </div>
+                <p>  <strong>Input1:</strong> <span id="hover-input1">-</span></p>
+                <p>  <strong>Input2:</strong> <span id="hover-input2">-</span></p>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- JavaScript for interactivity -->
+    <script>
+        const kernelShapes = {{ hover_infos | tojson | safe }};
+        let infoBox;
+        let isPinned = false; // true if clicked, false if only hovered
+      
+        document.addEventListener("DOMContentLoaded", () => {
+          setTimeout(() => {
+            const nodes = document.querySelectorAll("svg g.node");
+            infoBox = document.getElementById("hover-info");
+      
+            nodes.forEach(node => {
+              const labelEl = node.querySelector(".nodeLabel");
+              const rawId = node.id || "";
+              const id = rawId.replace(/^flowchart-/, "").replace(/-\d+$/, "");
+              const shape = kernelShapes[id];
+              if (!shape) return;
+      
+              node.style.cursor = "pointer";
+      
+              // HOVER: only show temporarily if not pinned
+              node.addEventListener("mouseenter", () => {
+                if (isPinned) return;
+                showPanel(node, shape);
+              });
+      
+              node.addEventListener("mouseleave", () => {
+                if (isPinned) return;
+                hidePanel();
+              });
+      
+              // CLICK: pin the panel
+              node.addEventListener("click", (e) => {
+                e.stopPropagation();
+                isPinned = true;
+                showPanel(node, shape);
+              });
+            });
+          }, 500);
+        });
+      
+        function showPanel(node, shape) {
+            document.querySelectorAll("g.node").forEach(n => n.classList.remove("hovered"));
+            node.classList.add("hovered");
+
+            const infoBox = document.getElementById("hover-info");
+            const panel = infoBox;
+
+            infoBox.style.display = "block";
+            document.getElementById("hover-name").innerText = shape.name;
+            document.getElementById("hover-input1").innerText = shape.input1;
+            document.getElementById("hover-input2").innerText = shape.input2 || "-";
+
+            // Compute position
+            const rect = node.getBoundingClientRect();
+            const panelWidth = panel.offsetWidth;
+            const panelHeight = panel.offsetHeight;
+
+            // Position to the right of the node (with fallback if near right edge)
+            let left = rect.right + 15;
+            let top = rect.top + window.scrollY;
+
+            if (left + panelWidth > window.innerWidth) {
+                left = rect.left - panelWidth - 15; // position to the left
+            }
+
+            panel.style.left = `${left}px`;
+            panel.style.top = `${top}px`;
+        }
+      
+        function hidePanel() {
+          if (!isPinned) {
+            infoBox.style.display = "none";
+            document.querySelectorAll("g.node").forEach(n => n.classList.remove("hovered"));
+          }
+        }
+      
+        // CLOSE BUTTON (×)
+        document.addEventListener("click", (e) => {
+          const closeBtn = document.getElementById("close-panel");
+          closeBtn.addEventListener("click", () => {
+            isPinned = false;
+            infoBox.style.display = "none";
+            document.querySelectorAll("g.node").forEach(n => n.classList.remove("hovered"));
+          });
+        });
+      
+        // CLICK OUTSIDE: unpin and hide
+        document.body.addEventListener("click", (e) => {
+          if (!e.target.closest("g.node") && !e.target.closest("#hover-info")) {
+            isPinned = false;
+            infoBox.style.display = "none";
+            document.querySelectorAll("g.node").forEach(n => n.classList.remove("hovered"));
+          }
+        });
+    </script>
+
+    <script>
+        makeDraggable(document.getElementById("hover-info"), document.getElementById("hover-header"));
+    
+        function makeDraggable(panel, handle) {
+        let isDragging = false;
+        let offsetX = 0, offsetY = 0;
+    
+        handle.addEventListener("mousedown", (e) => {
+            isDragging = true;
+            offsetX = e.clientX - panel.offsetLeft;
+            offsetY = e.clientY - panel.offsetTop;
+            panel.style.transition = "none";  // disable animation while dragging
+            document.body.style.userSelect = "none";  // prevent text selection
+        });
+    
+        document.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            panel.style.left = `${e.clientX - offsetX}px`;
+            panel.style.top = `${e.clientY - offsetY}px`;
+        });
+    
+        document.addEventListener("mouseup", () => {
+            isDragging = false;
+            document.body.style.userSelect = "";  // re-enable selection
+        });
+        }
+    </script>
+  
+       
+      
+    <!-- <style>
+      .node.hovered rect,
+      .node.hovered polygon,
+      .node.hovered ellipse {
+        stroke: #0077ff !important;
+        stroke-width: 3px !important;
+        fill: #eef7ff !important;
+      }
+    </style> -->
+      
+
+<!-- <script>
+    setTimeout(() => {
+      const nodes = document.querySelectorAll("svg g.node");
+      console.log("🧠 Found", nodes.length, "Mermaid nodes");
+  
+      nodes.forEach((node, i) => {
+        console.log(`--- node[${i}] innerHTML ---`);
+        console.log(node.innerHTML);
+  
+        const textEl = node.querySelector("text");
+        if (!textEl) {
+          console.log("❌ No <text> element found in node", i);
+          return;
+        }
+  
+        const label = textEl.textContent.trim();
+        console.log("✅ Found label:", label);
+      });
+    }, 2000);
+  </script> -->
+  
+       
+    
+</body>
+</html>

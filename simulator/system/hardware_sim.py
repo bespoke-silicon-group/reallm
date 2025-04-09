@@ -1,12 +1,12 @@
-import logging
-from scheduler import SimKernel, LLMKernel
-from hardware import HardwareNode, Hardware
-from model import KernelSizes, llama, deepseek
+import math
+import os
 import pandas as pd
 import numpy as np
-import math
 from scipy.interpolate import interp1d, LinearNDInterpolator, NearestNDInterpolator
 from scipy.spatial import KDTree
+
+from .scheduler import SimKernel, LLMKernel
+from .hardware import HardwareNode, Hardware
 
 class Performance:
     def __init__(self, 
@@ -85,7 +85,7 @@ class HardwareSim:
         self.task_sizes = []
         self.accept_new_request = True
     
-    def run(self, sim_kernel: SimKernel, exp_dist = None) -> tuple:
+    def run(self, kernel_lib_path: str, sim_kernel: SimKernel, exp_dist = None) -> tuple:
         hw_flops = self.hardware.flops
         hw_mem_bw = self.hardware.mem_bw
         hw_mem_size = self.hardware.mem_size
@@ -151,7 +151,7 @@ class HardwareSim:
                 kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism, exp_dist)
             else:
                 kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
-            latency = find_kernel_latency(hw_name, kernel_sizes)
+            latency = find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes)
             
             # Add IO latency
             E, T, P, C = parallelism
@@ -185,14 +185,13 @@ class HardwareSim:
         # logging.debug(f"             latency {latency}")
         return latency, self.accept_new_request
 
-def find_kernel_latency(hw_name, kernel_sizes):
+def find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes):
     total_latency = 0
     for kernel_type in kernel_sizes.keys():
-        csv_file = f'kernel_lib/{hw_name}_{kernel_type}_lat.csv'
+        csv_file = os.path.join(kernel_lib_path, f'{hw_name}_{kernel_type}_lat.csv')
         lat = batch_interpolate_latency(csv_file, kernel_sizes[kernel_type].kernel_sizes)
         total_latency += lat
     return  total_latency
-
 
 
 # Function to compute Hamming distance (number of differing dimensions)

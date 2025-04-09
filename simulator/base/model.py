@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import Optional, List
-from base import Base
 from collections import Counter
 import math
 import numpy as np
+
+from .base import Base
 
 @dataclass
 class Model(Base):
@@ -11,6 +12,7 @@ class Model(Base):
     num_layers: int
     d: int
     num_heads: int
+    moe: bool = False
     d_head: Optional[int] = None
     d_ff: Optional[int] = None
     act: str = 'gelu'
@@ -110,6 +112,8 @@ class llama:
         self.num_layers = layers
 
         self.head_per_kv_head = math.ceil(self.n_heads / self.n_kv_heads)
+
+        self.moe = False
     
     def get_kernel_sizes(self, prefill_len: int, decode_lens: List[int],
                          parallelism = (1, 1, 1, 1)):
@@ -166,6 +170,209 @@ class llama:
 
         return all_kernel_sizes
 
+    def generate_layer_mermaid(self, info_in_box: bool, prefill_len: int, decode_lens: List[int],
+                         parallelism = (1, 1, 1, 1)):
+        """
+        Generate a Mermaid flowchart for a single transformer layer of LLaMA.
+        """
+        E, T, P, C = parallelism
+
+        fc_len = prefill_len + len(decode_lens)
+        if len(decode_lens) > 0:
+            avg_decode_len = math.ceil(sum(decode_lens) / len(decode_lens))
+        else:
+            avg_decode_len = 0
+
+        d = self.d_model             # total hidden size
+        d_ff = self.d_ff              # FFN inner dim 
+        n_h = self.num_heads        # number of attention heads
+        d_h = self.d_head          # attention head size
+        n_kv_h = self.n_kv_heads    # number of kv heads
+
+        h_per_kv_h = self.head_per_kv_head
+
+        node_fc_l = math.ceil(fc_len / C)
+        node_prefill_l = math.ceil(prefill_len / C)
+        node_n_h = math.ceil(n_h / T)
+        node_n_kv_h = math.ceil(n_kv_h / T)
+        node_d_ff = math.ceil(d_ff / T)
+
+        def label(info_in_box, name, op_str, shape_str):
+            if info_in_box:
+                return f'"`{name}\nOp: {op_str}\nShape: {shape_str}`"'
+            else:
+                return f'"{name}"'
+
+
+        mermaid = f"""graph LR
+                        ln1[{label(info_in_box, "Ln1", "LayerNorm", f'[{node_fc_l}, {d}]')}]
+                        q_proj[{label(info_in_box,"Q Proj", "Matmul", f'[{node_fc_l}, {d}] * [{d}, {d_h * node_n_h}]')}]
+                        kv_proj[{label(info_in_box,"KV Proj", "Matmul", f'[{node_fc_l}, {d}] * [{d}, {2 * d_h * node_n_kv_h}]')}]
+
+                        attn_o_proj[{label(info_in_box, "Out Proj", "Matmul", f'[{node_fc_l}, {d_h * node_n_h}] * [{d_h * node_n_h}, {d}]')}]
+
+                        res_add1[{label(info_in_box, "ReAdd1", "Add", f'[{node_fc_l}, {d}]')}]
+
+                        ln2[{label(info_in_box, "Ln2", "LayerNorm", f'[{node_fc_l}, {d}]')}]
+
+                        subgraph FeedForward Network
+                            ffn_in[{label(info_in_box, "FFN In", "Matmul", f'[{node_fc_l}, {d}] * [{d}, {node_d_ff}]')}]
+                            ffn_in2[{label(info_in_box, "FFN In2", "Matmul", f'[{node_fc_l}, {d}] * [{d}, {node_d_ff}]')}]
+                            mul[{label(info_in_box, "Mul", "Mul", f'[{node_fc_l}, {node_d_ff}]')}]
+                            silu[{label(info_in_box, "SiLU", "SiLU", f'[{node_fc_l}, {node_d_ff}]')}]
+                            ffn_out[{label(info_in_box, "FFN Out", "Matmul", f'[{node_fc_l}, {node_d_ff}] * [{node_d_ff}, {d}]')}]
+                        end
+
+                        res_add2[{label(info_in_box, "ResAdd2", "Add", f'[{node_fc_l}, {d}]')}]
+
+                        ln1 --> q_proj
+                        ln1 --> kv_proj
+
+                        attn_o_proj --> res_add1
+                        ln1 --> res_add1
+
+                        res_add1 --> ln2
+                        ln2 --> ffn_in
+                        ln2 --> ffn_in2
+                        ffn_in --> mul
+                        ffn_in2 --> mul
+                        mul --> silu
+                        silu --> ffn_out
+                        ffn_out --> res_add2
+                        res_add1 --> res_add2
+
+        """
+        if prefill_len > 0:
+            # classDef prefill fill:#e6f7ff,stroke:#007acc,stroke-width:2px;
+            mermaid += f"""
+                        subgraph Prefill
+                            pfl_qk[{label(info_in_box, "QKᵀ", "Matmul", f'[{node_n_kv_h}, {h_per_kv_h * node_prefill_l}, {d_h}] * [{node_n_kv_h}, {d_h}, {prefill_len}]')}]:::prefill
+                            pfl_softmax[{label(info_in_box, "Softmax", "Softmax", f'[{node_n_h}, {node_prefill_l}, {prefill_len}]')}]:::prefill
+                            pfl_sv[{label(info_in_box, "SV", "Matmul", f'[{node_n_kv_h}, {h_per_kv_h * node_prefill_l}, {prefill_len}] * [{node_n_kv_h}, {prefill_len}, {d_h}]')}]:::prefill
+                        end
+
+                        q_proj --> pfl_qk
+                        kv_proj --> pfl_qk
+                        pfl_qk --> pfl_softmax
+                        pfl_softmax --> pfl_sv
+                        kv_proj --> pfl_sv
+                        pfl_sv --> attn_o_proj
+
+            """
+        if len(decode_lens) > 0:
+            mermaid += f"""
+                        subgraph Decode x {len(decode_lens)}
+                            dec_qk[{label(info_in_box, f"QKᵀ", "Matmul", f'[{node_n_kv_h}, {h_per_kv_h}, {d_h}] * [{node_n_kv_h}, {d_h}, {avg_decode_len}]')}]
+                            dec_softmax[{label(info_in_box, f"Softmax", "Softmax", f'[{n_h}, 1, {avg_decode_len}]')}]
+                            dec_sv[{label(info_in_box, f"SV", "Matmul", f'[{node_n_kv_h}, {h_per_kv_h}, {avg_decode_len}] * [{node_n_kv_h}, {avg_decode_len}, {d_h}]')}]
+                        end
+
+                        q_proj --> dec_qk
+                        kv_proj --> dec_qk
+                        dec_qk --> dec_softmax
+                        dec_softmax --> dec_sv
+                        kv_proj --> dec_sv
+                        dec_sv --> attn_o_proj
+            """
+        if info_in_box:
+            hover_infos = None
+        else:
+            hover_infos = {
+                "ln1": {
+                    "name": "LayerNorm",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": None,
+                },
+                "q_proj": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{d}, {d_h * node_n_h}]',
+                },
+                "kv_proj": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{d}, {2 * d_h * node_n_kv_h}]',
+                },
+                "attn_o_proj": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {d_h * node_n_h}]',
+                    "input2": f'[{d_h * node_n_h}, {d}]',
+                },
+                "res_add1": {
+                    "name": "Add",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{node_fc_l}, {d}]',
+                },
+                "ln2": {
+                    "name": "LayerNorm",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": None,
+                },
+                "ffn_in": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{d}, {node_d_ff}]',
+                },
+                "ffn_in2": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{d}, {node_d_ff}]',
+                },
+                "mul": {
+                    "name": "Mul",
+                    "input1": f'[{node_fc_l}, {node_d_ff}]',
+                    "input2": f'[{node_fc_l}, {node_d_ff}]',
+                },
+                "silu": {
+                    "name": "SiLU",
+                    "input1": f'[{node_fc_l}, {node_d_ff}]',
+                    "input2": None,
+                },
+                "ffn_out": {
+                    "name": "Matmul",
+                    "input1": f'[{node_fc_l}, {node_d_ff}]',
+                    "input2": f'[{node_d_ff}, {d}]',
+                },
+                "res_add2": {
+                    "name": "Add",
+                    "input1": f'[{node_fc_l}, {d}]',
+                    "input2": f'[{node_fc_l}, {d}]',
+                },
+                "pfl_qk": {
+                    "name": "Matmul",
+                    "input1": f'[{node_n_kv_h}, {h_per_kv_h * node_prefill_l}, {d_h}]',
+                    "input2": f'[{node_n_kv_h}, {d_h}, {prefill_len}]',
+                },
+                "pfl_softmax": {
+                    "name": "Softmax",
+                    "input1": f'[{node_n_h}, {node_prefill_l}, {prefill_len}]',
+                    "input2": None,
+                },
+                "pfl_sv": {
+                    "name": "Matmul",
+                    "input1": f'[{node_n_kv_h}, {h_per_kv_h * node_prefill_l}, {prefill_len}]',
+                    "input2": f'[{node_n_kv_h}, {prefill_len}, {d_h}]',
+                },
+                "dec_qk": {
+                    "name": "Matmul",
+                    "input1": f'[{node_n_kv_h}, {h_per_kv_h}, {d_h}]',
+                    "input2": f'[{node_n_kv_h}, {d_h}, {avg_decode_len}]',
+                },
+                "dec_softmax": {
+                    "name": "Softmax",
+                    "input1": f'[{n_h}, 1, {avg_decode_len}]',
+                    "input2": None,
+                },
+                "dec_sv": {
+                    "name": "Matmul",
+                    "input1": f'[{node_n_kv_h}, {h_per_kv_h}, {avg_decode_len}]',
+                    "input2": f'[{node_n_kv_h}, {avg_decode_len}, {d_h}]',
+                },
+            }
+
+        return mermaid, hover_infos
+
+
 class deepseek:
     def __init__(self, name, layers, d_model, d_dense, 
                  d_exp, dense_layers, n_heads,
@@ -195,6 +402,8 @@ class deepseek:
 
         self.d_qk_head = self.d_qk_nope_head + self.d_qk_rope_head
         self.sparse_layers = self.layers - self.dense_layers
+
+        self.moe = True
 
     def get_kernel_sizes(self, prefill_len: int, decode_lens: List[int],
                             parallelism = (1, 1, 1, 1), exp_distribution = None):

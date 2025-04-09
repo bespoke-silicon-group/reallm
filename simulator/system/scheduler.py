@@ -1,9 +1,9 @@
-from task import Task, PrefillTask, DecodeTask
-from request import Request
-from typing import List, Dict, Tuple, Optional
-from model import Model
 import logging
-import math
+from typing import List, Dict, Tuple, Optional
+
+from .task import Task, PrefillTask, DecodeTask
+from .request import Request
+from ..base.model import Model
 
 class LLMKernel:
     def __init__(self, 

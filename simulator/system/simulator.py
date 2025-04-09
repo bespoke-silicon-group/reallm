@@ -1,16 +1,13 @@
-import heapq
 import logging
-
-from collections import defaultdict
-from scheduler import Scheduler
-from hardware_sim import HardwareSim
-from request import Request
-from model import Model
-from task import PrefillTask, DecodeTask
 import pickle
 import os
 import numpy as np
-# import utils
+
+from .scheduler import Scheduler
+from .hardware_sim import HardwareSim
+from .request import Request
+from ..base.model import Model
+from .task import PrefillTask, DecodeTask
 
 class Simulator:
     def __init__(self,
@@ -22,7 +19,7 @@ class Simulator:
                  start_reqs: int,
                  end_reqs: int,
                  exp_dist_path: str = None,
-                 result_dir: str = 'results'
+                 workspace_dir: str = 'workspace',
                  ):
         self.model = model
         self.trace = trace
@@ -31,10 +28,12 @@ class Simulator:
         self.end_time = end_time
         self.start_reqs = start_reqs
         self.end_reqs = end_reqs
-        self.result_dir = result_dir
         self.accept_new_req = True
-        if not os.path.exists(result_dir):
-            os.makedirs(result_dir)
+
+        self.result_dir = os.path.join(workspace_dir, "results")
+        if not os.path.exists(self.result_dir):
+            os.makedirs(self.result_dir)
+        self.kernel_lib_path = os.path.join(workspace_dir, "kernel_lib")
 
         self.time = 0.0
         self.prefill_fifo = []
@@ -82,9 +81,9 @@ class Simulator:
         kernel, new_time = self.scheduler.run(self.time, self.prefill_fifo, self.decode_fifo, self.accept_new_req)
         self.time = new_time
         if self.exp_distribution is not None:
-            latency, accept_new_req = self.hardware_sim.run(kernel, self.exp_distribution)
+            latency, accept_new_req = self.hardware_sim.run(self.kernel_lib_path, kernel, self.exp_distribution)
         else:
-            latency, accept_new_req = self.hardware_sim.run(kernel)
+            latency, accept_new_req = self.hardware_sim.run(self.kernel_lib_path, kernel)
         self.accept_new_req = accept_new_req
         self.time += latency
 

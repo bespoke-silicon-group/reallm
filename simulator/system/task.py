@@ -1,4 +1,4 @@
-from request import Request
+from .request import Request
 
 class Task:
     def __init__(self, request: Request, arrival_time: int):

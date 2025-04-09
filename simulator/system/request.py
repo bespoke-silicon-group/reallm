@@ -1,5 +1,5 @@
 
-from model import Model
+from ..base.model import Model
 
 class Request:
     def __init__(self, 

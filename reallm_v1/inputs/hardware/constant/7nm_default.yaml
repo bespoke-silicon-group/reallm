@@ -1,0 +1,100 @@
+Chip:
+  # MACs density mm2/Tera BF16 ops
+  # IPU: 215mm2 tile logic for 250TOPS --> 0.86mm2/TOPS
+  # TPUv4i: 100mm2 MXU for 138TOPS --> 0.72mm2/TOPS
+  macs_density: 0.72 # mm2/TOPS
+  # SRAM density mm2/MB, data from real implementations
+  sram_density: 0.45
+  # Power estimation for TDP, W/Tera BF16 ops
+  w_per_tops: 1.3
+  max_power_density: 1.1 # Watts/mm2
+  padring_width: 0.35 # mm
+
+  max_die_area: 900.0 # mm2
+  D0: 0.001 # defects/mm2 = defects/cm2/100
+  alpha: 10.0 # critical level for the yield model
+  wafer_diameter: 300 # in mm
+  wafer_dicing_gap: 0.1 # in mm
+  wafer_cost: 10000 # in $
+  testing_cost_overhead: 0.01 # testing add 0.01 cost per die
+
+  # HBM PHY and controller area per channel, mm2
+  hbm_phy_ctrl_area_per_channel: 1.04 # mm2
+
+  # 3D memory
+  mem_3d_tsv_ctrl_area_per_vault: 0.5 # mm2, double check this number
+  mem_3d_ctrl_area_per_vault: 0.15 # 0.62 mm2 in 28nm (https://past.date-conference.com/proceedings-archive/2015/pdf/0054.pdf, Sec. IV)
+                                   # Since CPP of 28nm is 117nm,  of 7nm is 57nm, the area should be 0.62/(117/57)^2 = 0.15 mm2
+                                   # https://teamvlsi.com/2021/09/tsmc-7nm-16nm-and-28nm-technology-node-comparisons.html
+  mem_3d_area_per_tsv: 0.0097 # mm2
+  mem_3d_test_area_per_vault: 0.72 # mm2 (https://docs.google.com/document/d/1wDLyOmflyoiVCsAfPkpyUbkbRpb7HP47ZrFmqcssA-I)
+
+Package:
+  # max die area for a package, mm2
+  max_die_area: 1600.0
+  max_power_density: 1.0 # Watts/mm2
+
+  # Package cost model, based on Chiplet Actuary
+  # Paper: https://arxiv.org/abs/2203.12268
+  # Github: https://github.com/Yinxiao-Feng/DAC2022
+  # Organic Substrate
+  # package area = total_die_area * os_area_scale_factor
+  os_area_scale_factor: 4.0
+  os_cost_per_mm2: 0.005 # $/mm2
+  # if there's more than one chips in a package, the cost will be multiplied by the factor,
+  # which depends on the package area: {area_threshold: cost_factor}
+  os_layer_scale_factor: {900: 2, 289: 1.75, 0: 1.0}
+  os_bonding_yield: 0.99
+  c4_bump_cost_per_mm2: 0.005
+  # Silicon Interposer
+  si_area_scale_factor: 1.1
+  si_wafer_cost: 1937.0 # $/wafer for 55nm technology
+  si_bonding_yield: 0.95
+  si_D0: 0.0007 # defects/mm2 = defects/cm2/100
+  si_alpha: 6.0 # critical level
+
+Server:
+  PCBCost: 50.0            # $/each (parts not included)x2 if there is DRAM
+  PCBPartsCost: 50.0       # (w/o DCDC, michael's sheet)
+  DCDCCostPerAmp: 0.33     # $/amp
+  DCDCMaxCurrent: 30.0     # Amps
+  DCDCEfficiency: 0.95     # 5% loss
+  MaxDCDCCost: 300.0       # $
+  FanPower: 7.4            # W/each
+  FanCost: 15.0
+  APPPower: 50.0           # W (Application Processor + Srv DRAM), on average
+  APPCost: 200.0           # $ (Application Processor + Srv DRAM)
+  # PSU
+  PSUCostPerW: 0.13        # $/W
+  PSUEfficiency: 0.95      # 5% loss
+  PSUOutputVoltage: 12.0
+  MaxPSUCost: 100.0        # $
+  # Chassis
+  ChassisCost: 30.0        # $
+  # Ethernet
+  # EthernetCost: 10.0     # $ for 1 GigE
+  # EthernetCost: 100.0    # $ for 10 GigE
+  EthernetCost: 450.0      # $ for 100 GigE
+  SrvLife: 1.5             # years
+  SrvMaxPower: 2000.0      # W
+  LaneAreaMin: 100.0       # mm2
+  LaneAreaMax: 9000.0      # mm2
+
+TCO:
+  ElectricityCost: 0.067   # $/kWh
+  InterestRate: 0.08       # Annual Interest
+  DCCapex: 10.0            # $/W
+  DCAmortPeriod: 12.0      # amortizatio period in year
+  DCOpex: 0.04             # $/kW/month
+  PUE: 1.5
+  SrvOpexRate: 0.05        # % of server amortization
+  SrvAvgPwr: 1.0           # Server Average Power Relative to Peak,,
+
+Energy:
+  sram_wgt: 1.25 # pJ/byte read, large SRAM, for weight
+  sram_act: 0.94 # pJ/byte read, small SRAM, for activation, from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
+  dram: 80.0 # pJ/byte read
+  hbm2: 31.2 # pJ/byte read
+  stacked_dram: 18.72 # pJ/byte read
+  # fma_fp16: float = 0.16 + 0.34 # from https://gwern.net/doc/ai/scaling/hardware/2021-jouppi.pdf
+  fma_fp16: 1.3 # pJ, from slides 17 of https://hc33.hotchips.org/assets/program/conference/day2/HC2021.Graphcore.SimonKnowles.v04.pdf

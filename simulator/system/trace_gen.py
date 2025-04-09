@@ -234,23 +234,24 @@ def download_file(url, filename):
         f.write(response.content)
 
 
-def download_azure_llm_traces():
+def download_azure_llm_traces(path: str = "workspace/traces"):
     """
     Download traces from the given URL.
     """
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    os.makedirs(path, exist_ok=True)
 
     url_base = "https://raw.githubusercontent.com/Azure/AzurePublicDataset/master/data/"
 
-    if not os.path.exists("data/code_distributions.csv"):
+    code_path = os.path.join(path, "code_distributions.csv")
+    if not os.path.exists(code_path):
         url = url_base + "AzureLLMInferenceTrace_code.csv"
-        download_file(url, "data/code_distributions.csv")
+        download_file(url, code_path)
         print("Downloaded code traces")
 
-    if not os.path.exists("data/conv_distributions.csv"):
+    conv_path = os.path.join(path, "conv_distributions.csv")
+    if not os.path.exists(conv_path):
         url = url_base + "AzureLLMInferenceTrace_conv.csv"
-        download_file(url, "data/conv_distributions.csv")
+        download_file(url, conv_path)
         print("Downloaded conv traces")
 
 
