@@ -136,12 +136,13 @@ class llama:
             # K/V proj: (fc_len, d_model) * (d_model, 2*d_head*n_kv_heads) = (fc_len, 2*d_head*n_kv_heads)
             all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), self.d_model, 2*self.d_head * math.ceil(self.n_kv_heads / T))
             # PREFILL
-            # Q*K^T: (n_kv_heads, head_per_kv_head * prefill_len, d_head) * (n_kv_heads, d_head, prefill_len) = (n_kv_heads, head_per_kv_head * prefill_len, prefill_len)
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_kv_heads / T), self.head_per_kv_head * math.ceil(prefill_len / C), self.d_head, prefill_len)
-            # softmax: (n_heads, prefill_len, prefill_len)
-            all_kernel_sizes['softmax'].add_kernel(math.ceil(self.n_heads / T), math.ceil(prefill_len / C), prefill_len)
-            # S*V: (n_kv_heads, head_per_kv_head * prefill_len, prefill_len) * (n_kv_heads, prefill_len, d_head) = (n_kv_heads, head_per_kv_head * prefill_len, d_head)
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_kv_heads / T), self.head_per_kv_head * math.ceil(prefill_len / C), prefill_len, self.d_head)
+            if prefill_len > 0:
+                # Q*K^T: (n_kv_heads, head_per_kv_head * prefill_len, d_head) * (n_kv_heads, d_head, prefill_len) = (n_kv_heads, head_per_kv_head * prefill_len, prefill_len)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_kv_heads / T), self.head_per_kv_head * math.ceil(prefill_len / C), self.d_head, prefill_len)
+                # softmax: (n_heads, prefill_len, prefill_len)
+                all_kernel_sizes['softmax'].add_kernel(math.ceil(self.n_heads / T), math.ceil(prefill_len / C), prefill_len)
+                # S*V: (n_kv_heads, head_per_kv_head * prefill_len, prefill_len) * (n_kv_heads, prefill_len, d_head) = (n_kv_heads, head_per_kv_head * prefill_len, d_head)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_kv_heads / T), self.head_per_kv_head * math.ceil(prefill_len / C), prefill_len, self.d_head)
             # DECODE
             for ctx_len in decode_lens:
                 # QK^T: (n_kv_heads, head_per_kv_head, d_head) * (n_kv_heads, d_head, ctx_len) = (n_kv_heads, head_per_kv_head, ctx_len)
@@ -430,25 +431,27 @@ class deepseek:
             all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), math.ceil(self.d_model / T), self.kv_lora_rank + self.d_qk_rope_head)
 
             # PREFILL
-            # matmul1, absorb WUK into WUQ: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L480
-            # matmul2: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L483
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T),  math.ceil(prefill_len / C), self.d_qk_nope_head, self.kv_lora_rank)
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), self.kv_lora_rank, prefill_len)
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), self.d_qk_rope_head, prefill_len)
-            # a_mul_v
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), prefill_len, self.kv_lora_rank)
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T),  math.ceil(prefill_len / C), self.kv_lora_rank, self.d_v_head)
+            if prefill_len > 0:
+                # matmul1, absorb WUK into WUQ: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L480
+                # matmul2: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L483
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T),  math.ceil(prefill_len / C), self.d_qk_nope_head, self.kv_lora_rank)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), self.kv_lora_rank, prefill_len)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), self.d_qk_rope_head, prefill_len)
+                # a_mul_v
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T) * math.ceil(prefill_len / C), prefill_len, self.kv_lora_rank)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T),  math.ceil(prefill_len / C), self.kv_lora_rank, self.d_v_head)
 
             # DECODE
-            # matmul1, absorb WUK into WUQ: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L480
-            all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, self.d_qk_nope_head, self.kv_lora_rank)
-            for ctx_len in decode_lens:
-                # matmul2: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L483
-                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), self.kv_lora_rank, ctx_len)
-                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), self.d_qk_rope_head, ctx_len)
-                # a_mul_v
-                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), ctx_len, self.kv_lora_rank)
-                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, self.kv_lora_rank, self.d_v_head)
+            if len(decode_lens) > 0:
+                # matmul1, absorb WUK into WUQ: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L480
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, self.d_qk_nope_head, self.kv_lora_rank)
+                for ctx_len in decode_lens:
+                    # matmul2: https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py#L483
+                    all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), self.kv_lora_rank, ctx_len)
+                    all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), self.d_qk_rope_head, ctx_len)
+                    # a_mul_v
+                    all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), ctx_len, self.kv_lora_rank)
+                    all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, self.kv_lora_rank, self.d_v_head)
 
             # Output proj: (fc_len, n_heads * d_v_head) * (n_heads * d_v_head, d_model) = (fc_len, d_model)
             all_kernel_sizes['matmul'].add_kernel(fc_len, math.ceil(self.n_heads / T) * self.d_v_head, self.d_model)

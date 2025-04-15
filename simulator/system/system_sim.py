@@ -8,9 +8,11 @@ from .scheduler import Scheduler
 def run_system_sim(model, trace,
                    hw_node_name, num_nodes, parallelism, io_algo, 
                    scheduler_algo, prefill_chunk=2048,
+                   sim_method='roofline', # roofline, llmcompass
                    end_reqs=500, # should be set based on the request rate and workload
                    max_ctx_len = 8192*4,
                    workspace_dir = 'workspace/',
+                   overwrite=False,
                    ):
 
     # This actually doesn't matter ??
@@ -20,7 +22,7 @@ def run_system_sim(model, trace,
 
     hardware_sim = HardwareSim(
         hardware=eval_hardware,
-        method='llmcompass',
+        method=sim_method,
         scheduler_algo=scheduler_algo,
         max_ctx_len = max_ctx_len,
     )
@@ -36,13 +38,11 @@ def run_system_sim(model, trace,
     print(f'======{workload}_{request_rate}_{hw_node_name} Begin =====\n')
     eval_hardware.node.name = hw_node_name
     hw_name = f"{num_nodes}-{eval_hardware.node.name}-{scheduler_algo}-{parallelism}"
-    file_name = f"results/{model.name}/rr_{workload}_{request_rate}/{hw_name}/sim_results.csv"
+    file_name = f"{workspace_dir}/{sim_method}_results/{model.name}/rr_{workload}_{request_rate}/{hw_name}/sim_results.csv"
 
-    if os.path.exists(file_name):
-        print(f'======{workload}_{request_rate}_{hw_node_name} Exists =====\n')
+    if os.path.exists(file_name) and not overwrite:
+        print(f'======{sim_method} Sim: {workload}_{request_rate}_{hw_node_name} Exists =====\n')
         return
-
-    end_reqs = 500
 
     sim = Simulator(
         model = model,
@@ -55,4 +55,4 @@ def run_system_sim(model, trace,
         workspace_dir=workspace_dir,
     )
     sim.run()
-    print(f'======{workload}_{request_rate}_{hw_node_name} Done =====\n')
+    print(f'======{sim_method} Sim: {workload}_{request_rate}_{hw_node_name} Done =====\n')

@@ -1,0 +1,20 @@
+model: deepseekv3
+
+trace: rr_code_1.csv
+
+heterogeneous: true # different systm for prefill and decode
+
+prefill_system:
+  num_devices: 32
+  attention_parallelism: tp4_dp8   # 4-way Tensor Parallel + 8-way Data Parallel
+  ffn_parallelism: ep32            # 32-way Expert Parallel
+  batching: no_batching            # first come first serve, no batching
+
+decode_system:
+  num_devices: 320
+  attention_parallelism: tp4_dp80  # 4-way Tensor Parallel + 80-way Data Parallel
+  ffn_parallelism: ep320           # 320-way Expert Parallel
+  batching: upto_memory_limit      # Batching all tokens in the decode queue, upto the memory limit
+
+output_dir: workspace/deepseekv3_hetero
+

@@ -183,6 +183,30 @@ def generate_traces(max_requests,
         trace_df.to_csv(trace_filename, index=False)
 
 
+def generate_reasoning_traces(
+        decode_times,
+        max_requests,
+        end_time,
+        request_rates,
+        pt_distributions_file,
+        trace_filename_template):
+    """
+    Generate reasoning model traces with prompt/token size distributions.
+    The number of decode tokens are multiplied by the decode times to reflect the feature of reasoning model.
+    """
+    if decode_times <= 0:
+        raise ValueError("decode_times should be positive integer")
+    for request_rate in request_rates:
+        trace_df = generate_trace_from_prompt_token_size_distributions(
+            max_requests,
+            end_time,
+            request_rate,
+            pt_distributions_file)
+        trace_filename = trace_filename_template.format(request_rate)
+        trace_df['token_size'] = trace_df['token_size'] * decode_times
+        trace_df.to_csv(trace_filename, index=False)
+
+
 def generate_code_traces(
     max_requests,
     end_time,

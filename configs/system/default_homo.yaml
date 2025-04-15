@@ -1,0 +1,12 @@
+model: llama70b
+
+trace: rr_code_1.csv
+
+heterogeneous: false
+
+system:
+  num_devices: 8
+  attention_parallelism: tp8   # 8-way Tensor Parallel
+  ffn_parallelism: tp8         # 8-way Tensor Parallel
+  batching: mixed_continuous
+

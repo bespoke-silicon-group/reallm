@@ -30,7 +30,7 @@ class Simulator:
         self.end_reqs = end_reqs
         self.accept_new_req = True
 
-        self.result_dir = os.path.join(workspace_dir, "results")
+        self.result_dir = os.path.join(workspace_dir, f"{hardware_sim.method}_results")
         if not os.path.exists(self.result_dir):
             os.makedirs(self.result_dir)
         self.kernel_lib_path = os.path.join(workspace_dir, "kernel_lib")

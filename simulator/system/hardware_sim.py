@@ -1,5 +1,6 @@
 import math
-import os
+import os, sys
+from pathlib import Path
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d, LinearNDInterpolator, NearestNDInterpolator
@@ -7,6 +8,7 @@ from scipy.spatial import KDTree
 
 from .scheduler import SimKernel, LLMKernel
 from .hardware import HardwareNode, Hardware
+from ..kernel.kernel_roofline import kernel_perf_roofline
 
 class Performance:
     def __init__(self, 
@@ -122,57 +124,59 @@ class HardwareSim:
         #     logging.info(f"Prefill n {sim_kernel.prefill_kernel.n}, decode n {sim_kernel.decode_kernel.n}, num_tokens {num_tokens}")
         #     raise ValueError(f"Model size {model_byte / 1e9:.2f}GB + kv cache size {kv_cache_byte / 1e9:.2f}GB > HBM size {hw_mem_size / 1e9:.2f}GB")
 
-        if self.method == 'llmcompass':
-            model = sim_kernel.model
-            hw_name = self.hardware.node.name
-            num_nodes = self.hardware.num_nodes
-            parallelism = self.hardware.parallelism
 
-            if sim_kernel.prefill_kernel == None and sim_kernel.decode_kernel == None:
+        if sim_kernel.prefill_kernel == None and sim_kernel.decode_kernel == None:
                 raise ValueError(f"Both prefill and decode kernels are None")
-            elif sim_kernel.prefill_kernel == None:
-                prefill_len = 0
-                decode_lens = sim_kernel.decode_kernel.ctx
-            elif sim_kernel.decode_kernel == None:
-                prefill_len = sim_kernel.prefill_kernel.n
-                decode_lens = []
-            else:
-                prefill_len = sim_kernel.prefill_kernel.n
-                decode_lens = sim_kernel.decode_kernel.ctx
-            
-            if prefill_len > 0 and len(decode_lens) > 0 and self.scheduler_algo == 'continuous':
-                raise ValueError(f"Prefill len {prefill_len} > 0 and decode lens {decode_lens} > 0 in continuous scheduler")
-            
+        elif sim_kernel.prefill_kernel == None:
+            prefill_len = 0
+            decode_lens = sim_kernel.decode_kernel.ctx
+        elif sim_kernel.decode_kernel == None:
+            prefill_len = sim_kernel.prefill_kernel.n
+            decode_lens = []
+        else:
+            prefill_len = sim_kernel.prefill_kernel.n
+            decode_lens = sim_kernel.decode_kernel.ctx
+        
+        if prefill_len > 0 and len(decode_lens) > 0 and self.scheduler_algo == 'continuous':
+            raise ValueError(f"Prefill len {prefill_len} > 0 and decode lens {decode_lens} > 0 in continuous scheduler")
 
-            # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}")
-            self.task_sizes.append((prefill_len, decode_lens))
+        model = sim_kernel.model
+        hw_name = self.hardware.node.name
+        num_nodes = self.hardware.num_nodes
+        parallelism = self.hardware.parallelism
 
-            if hasattr(model, 'n_routed_exp'):
-                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism, exp_dist)
-            else:
-                kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
+        # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}")
+        self.task_sizes.append((prefill_len, decode_lens))
+
+        if hasattr(model, 'n_routed_exp'):
+            kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism, exp_dist)
+        else:
+            kernel_sizes = model.get_kernel_sizes(prefill_len, decode_lens, parallelism)
+
+        if self.method == 'roofline':
+            latency = get_roofline_latency(self.hardware, kernel_sizes) * (1 + 0.3)
+        elif self.method == 'llmcompass':
             latency = find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes)
-            
-            # Add IO latency
-            E, T, P, C = parallelism
-            num_layers = model.num_layers
-            # Allreduce latency
-            if 'llama' in model.name:
-                num_bytes = 2 * (prefill_len + len(decode_lens)) * model.d_model
-                allreduce_latency = self.hardware.get_allreduce_latency(num_bytes, T)
-            else:
-                if T != 1 or C != 1:
-                    raise ValueError(f"Unsupported parallelism {parallelism} for model {model.name}")
-                allreduce_latency = 0.0
-
-            io_latency = (2 * allreduce_latency * math.ceil(num_layers / P))
-
-            latency += io_latency
-
-            # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}, io_latency {io_latency}, latency {latency}")
-                 
         else:
             raise ValueError(f"Unknown method {self.method}")
+
+        # Add IO latency
+        E, T, P, C = parallelism
+        num_layers = model.num_layers
+        # Allreduce latency
+        if 'llama' in model.name:
+            num_bytes = 2 * (prefill_len + len(decode_lens)) * model.d_model
+            allreduce_latency = self.hardware.get_allreduce_latency(num_bytes, T)
+        else:
+            if T != 1 or C != 1:
+                raise ValueError(f"Unsupported parallelism {parallelism} for model {model.name}")
+            allreduce_latency = 0.0
+
+        io_latency = (2 * allreduce_latency * math.ceil(num_layers / P))
+
+        latency += io_latency
+
+        # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}, io_latency {io_latency}, latency {latency}")
         
 
         # logging.debug(f"HardwareSim:")
@@ -185,6 +189,20 @@ class HardwareSim:
         # logging.debug(f"             latency {latency}")
         return latency, self.accept_new_request
 
+def get_roofline_latency(hardware, kernel_sizes):
+    hw_name = hardware.node.name
+    hardware_llmcompass_json = f'LLMCompass/configs/{hw_name}.json'
+    total_latency = 0
+    for kernel_type in kernel_sizes.keys():
+        all_sizes = kernel_sizes[kernel_type].kernel_sizes
+        for shape, freq in all_sizes.items():
+            # lat = 1e-9
+            # Calculate latency based on the roofline model
+            lat = kernel_perf_roofline(hardware_llmcompass_json, kernel_type, shape)
+            # print(f"kernel_type {kernel_type}, shape {shape}, freq {freq}, lat {lat}")
+            total_latency += lat * freq
+    return total_latency
+
 def find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes):
     total_latency = 0
     for kernel_type in kernel_sizes.keys():
@@ -192,7 +210,6 @@ def find_kernel_latency(kernel_lib_path, hw_name, kernel_sizes):
         lat = batch_interpolate_latency(csv_file, kernel_sizes[kernel_type].kernel_sizes)
         total_latency += lat
     return  total_latency
-
 
 # Function to compute Hamming distance (number of differing dimensions)
 def hamming_distance(shape1, shape2):
