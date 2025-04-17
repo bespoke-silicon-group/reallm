@@ -143,7 +143,7 @@ class HardwareSim:
         model = sim_kernel.model
         hw_name = self.hardware.node.name
         num_nodes = self.hardware.num_nodes
-        parallelism = self.hardware.parallelism
+        parallelism = (self.hardware.ep, self.hardware.tp, self.hardware.pp, self.hardware.cp)
 
         # print(f"prefill_len {prefill_len}, decode_lens {decode_lens}")
         self.task_sizes.append((prefill_len, decode_lens))

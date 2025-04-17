@@ -26,10 +26,19 @@ class Hardware:
         self.node = node
         self.num_nodes = num_nodes
         self.io_algo = io_algo
-        self.parallelism = parallelism
-        self.ep, self.tp, self.pp, self.cp = parallelism
+        self.parallelism = parallelism # 'ep#_tp#_pp#_cp#'
+
+        for para_type in ['ep', 'tp', 'pp', 'cp', 'dp']:
+            if para_type in parallelism:
+                self.__setattr__(para_type, int(parallelism.split(para_type)[1].split('_')[0]))
+            else:
+                self.__setattr__(para_type, 1)
+
         if num_nodes % self.pp != 0:
             raise ValueError(f"num_nodes {num_nodes} must be divisible by pp {self.pp}")
+        
+        if self.ep * self.tp * self.pp * self.cp != num_nodes:
+            raise ValueError(f"num_nodes {num_nodes} must be equal to ep {self.ep} * tp {self.tp} * pp {self.pp} * cp {self.cp}")
 
         self.flops = node.flops * num_nodes
         self.mem_bw = node.mem_bw * num_nodes

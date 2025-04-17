@@ -1,3 +1,6 @@
+# Use bash as the shell
+SHELL := /bin/bash
+
 # Root of the git repo.
 GIT_ROOT := $(shell git rev-parse --show-toplevel)
 

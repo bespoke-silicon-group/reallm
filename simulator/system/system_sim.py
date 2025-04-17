@@ -12,7 +12,6 @@ def run_system_sim(model, trace,
                    end_reqs=500, # should be set based on the request rate and workload
                    max_ctx_len = 8192*4,
                    workspace_dir = 'workspace/',
-                   overwrite=False,
                    ):
 
     # This actually doesn't matter ??
@@ -32,17 +31,7 @@ def run_system_sim(model, trace,
         prefill_chunk=prefill_chunk,
     )
 
-    workload = trace.split('/')[-1].split('_')[1]
-    request_rate = trace.split('/')[-1].split('_')[2][:-4]
-
-    print(f'======{workload}_{request_rate}_{hw_node_name} Begin =====\n')
     eval_hardware.node.name = hw_node_name
-    hw_name = f"{num_nodes}-{eval_hardware.node.name}-{scheduler_algo}-{parallelism}"
-    file_name = f"{workspace_dir}/{sim_method}_results/{model.name}/rr_{workload}_{request_rate}/{hw_name}/sim_results.csv"
-
-    if os.path.exists(file_name) and not overwrite:
-        print(f'======{sim_method} Sim: {workload}_{request_rate}_{hw_node_name} Exists =====\n')
-        return
 
     sim = Simulator(
         model = model,
@@ -55,4 +44,3 @@ def run_system_sim(model, trace,
         workspace_dir=workspace_dir,
     )
     sim.run()
-    print(f'======{sim_method} Sim: {workload}_{request_rate}_{hw_node_name} Done =====\n')
