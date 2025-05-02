@@ -86,11 +86,26 @@ def run_system_simulation(config, workspace_dir, model,
     if trace_override:
         traces = [trace_override]
     else:
+        trace_dir = os.path.join(workspace_dir, "traces")
         if task_override and rate_override:
-            trace_dir = os.path.join(workspace_dir, "traces")
             traces = []
             for task in task_override:
                 for rate in rate_override:
+                    trace_filename = f'rr_{task}_{rate}.csv'
+                    if os.path.exists(os.path.join(trace_dir, trace_filename)):
+                        traces.append(os.path.join(trace_dir, trace_filename))
+                    else:
+                        print(f"Warning: Trace file {trace_filename} not found. Skipping.")
+        elif 'tasks' in system_sim_config and 'request_rates' in system_sim_config:
+            tasks = system_sim_config['tasks']
+            rates = system_sim_config['request_rates']
+            if isinstance(tasks, str):
+                tasks = [tasks]
+            if isinstance(rates, str):
+                rates = [rates]
+            traces = []
+            for task in tasks:
+                for rate in rates:
                     trace_filename = f'rr_{task}_{rate}.csv'
                     if os.path.exists(os.path.join(trace_dir, trace_filename)):
                         traces.append(os.path.join(trace_dir, trace_filename))
