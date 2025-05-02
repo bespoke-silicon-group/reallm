@@ -537,6 +537,79 @@ class deepseek:
 
         return all_kernel_sizes
 
+class gpt:
+    def __init__(self, name, layers, d_model, d_head, n_heads,
+                 vocab_size = None, max_seq_len = None):
+        self.name = name
+        self.layers = layers
+        self.d_model = d_model
+        self.d_ff = d_model * 4
+        self.d_head = d_head
+        self.n_heads = n_heads
+        self.num_heads = n_heads
+        self.n_kv_heads = n_heads
+        self.vocab_size = vocab_size
+        self.max_seq_len = max_seq_len
+        self.num_layers = layers
+
+        self.head_per_kv_head = 1
+
+        self.moe = False
+    
+    def get_kernel_sizes(self, prefill_len: int, decode_lens: List[int],
+                         parallelism = (1, 1, 1, 1)):
+        E, T, P, C = parallelism
+
+        all_kernel_sizes = dict()
+        for kernel_type in eval_kernel_types:
+            all_kernel_sizes[kernel_type] = KernelSizes(kernel_type)
+        
+        fc_len = prefill_len + len(decode_lens)
+        # Embedding layer
+        # (fc_len, vocab_size) * (vocab_size, d_model) = (fc_len, d_model)
+        # all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), math.ceil(self.vocab_size / T), self.d_model)
+
+        # All layers
+        for _ in range(math.ceil(self.layers / P)):
+            # Attention layer
+            # Q proj: (fc_len, d_model) * (d_model, d_head*n_heads) = (fc_len, d_head*n_heads)
+            all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), self.d_model, self.d_head *  math.ceil(self.n_heads / T))
+            # K/V proj: (fc_len, d_model) * (d_model, 2*d_head*n_heads) = (fc_len, 2*d_head*n_heads)
+            all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), self.d_model, 2*self.d_head * math.ceil(self.n_heads / T))
+            # PREFILL
+            if prefill_len > 0:
+                # Q*K^T: (n_heads, prefill_len, d_head) * (n_heads, d_head, prefill_len) = (n_heads, prefill_len, prefill_len)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T),  math.ceil(prefill_len / C), self.d_head, prefill_len)
+                # softmax: (n_heads, prefill_len, prefill_len)
+                all_kernel_sizes['softmax'].add_kernel(math.ceil(self.n_heads / T), math.ceil(prefill_len / C), prefill_len)
+                # S*V: (n_heads, prefill_len, prefill_len) * (n_heads, prefill_len, d_head) = (n_heads, prefill_len, d_head)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), math.ceil(prefill_len / C), prefill_len, self.d_head)
+            # DECODE
+            for ctx_len in decode_lens:
+                # QK^T: (n_heads, 1, d_head) * (n_heads, d_head, ctx_len) = (n_heads, 1, ctx_len)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, self.d_head, ctx_len)
+                # softmax: (n_heads, 1, ctx_len)
+                all_kernel_sizes['softmax'].add_kernel(self.n_heads, 1, ctx_len)
+                # S*V: (n_heads, 1, ctx_len) * (n_heads, ctx_len, d_head) = (n_heads, 1, d_head)
+                all_kernel_sizes['matmul'].add_kernel(math.ceil(self.n_heads / T), 1, ctx_len, self.d_head)
+            # Attention output proj: (fc_len, d_head*n_heads) * (d_head*n_heads, d_model) = (fc_len, d_model)
+            all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), self.d_head * math.ceil(self.n_heads / T), self.d_model)
+            all_kernel_sizes['layernorm'].add_kernel(math.ceil(fc_len / C), self.d_model)
+
+            # Feedforward layer
+            # FF1: (fc_len, d_model) * (d_model, d_ff) = (fc_len, d_ff)
+            all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), self.d_model, math.ceil(self.d_ff / T))
+            all_kernel_sizes['silu'].add_kernel(math.ceil(fc_len / C), math.ceil(self.d_ff / T))
+            # FF2: (fc_len, d_ff) * (d_ff, d_model) = (fc_len, d_model)
+            all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), math.ceil(self.d_ff / T), self.d_model)
+            all_kernel_sizes['layernorm'].add_kernel(math.ceil(fc_len / C), self.d_model)
+
+        # Output layer
+        # (fc_len, d_model) * (d_model, vocab_size) = (fc_len, vocab_size)
+        # all_kernel_sizes['matmul'].add_kernel(math.ceil(fc_len / C), math.ceil(self.d_model / T), self.vocab_size)
+
+        return all_kernel_sizes
+
 # %%
 llama70b = llama(name='llama70b',
                  layers=80,
@@ -589,3 +662,10 @@ deepseekv3 = deepseek(name='deepseekv3',
                       d_qk_rope_head=64,
                       d_v_head=128,
                       vocab_size=129280,)
+
+opt175b = gpt(name='opt175b',
+              layers=96,
+                d_model=12288,
+                d_head=128,
+                n_heads=96,
+)

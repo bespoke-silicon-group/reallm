@@ -21,4 +21,5 @@ LC_matmul_count/
 systolic_array_model/
 mem_simulator/
 plot/
-workspace/
+workspace/*results*
+workspace/traces/

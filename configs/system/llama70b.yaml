@@ -1,0 +1,38 @@
+model: llama70b
+
+kernel_sim:
+  compile_mode: heuristic-GPU
+  kernel_types:
+    - softmax
+    - layernorm
+    - mul
+    - silu
+    - matmul
+  prefill_blocks: [64, 128, 256, 512, 1024, 2048]
+  decode_ctxt: [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+
+heterogeneous: false
+system:
+  device: GH100
+  num_devices: 8
+  io_algo: multishot
+  attention_parallelism: tp8   # 8-way Tensor Parallel
+  ffn_parallelism: tp8         # 8-way Tensor Parallel
+  batching_algo: mixed-sarathi
+  prefill_chunk: 2048
+
+system_sim:
+  sim_method: llmcompass # roofline, llmcompass
+  traces: workspace/traces/rr_code_1.csv
+  end_reqs: 20
+  # or 
+  # tasks: [code, conv]
+  # request_rates: [1, 2, 3, 4, 5, 6, 7]
+
+trace_gen:
+  random_seed: 0
+  tasks: [code, conv]
+  request_rates: [1, 2, 3, 4, 5, 6, 7]
+  max_requests: 50000
+  end_time: 500
+
