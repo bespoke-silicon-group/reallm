@@ -2,7 +2,7 @@ import yaml
 import argparse
 import os
 import numpy as np
-from simulator.base.model import llama70b, llama405b, deepseekv2, deepseekv3
+from simulator.base.model import llama70b, llama405b, deepseekv2, deepseekv3, opt175b
 from simulator.kernel.kernel_size_gen import gen_kernel_sizes
 from simulator.kernel.kernel_sim import kernel_perf_sim
 from simulator.system.trace_gen import generate_traces, download_azure_llm_traces
@@ -166,9 +166,12 @@ def main(args):
         'llama70b': llama70b,
         'llama405b': llama405b,
         'deepseekv2': deepseekv2, 
-        'deepseekv3': deepseekv3
+        'deepseekv3': deepseekv3,
+        'opt175b': opt175b,
     }
-    model = models.get(model_name, llama70b)
+    if model_name not in models:
+        raise ValueError(f"Model {model_name} not supported. Supported models are: {list(models.keys())}")
+    model = models[model_name]
     
     # Run the requested mode
     if args.mode in ['all', 'kernel']:
