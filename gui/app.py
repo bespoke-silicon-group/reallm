@@ -2,7 +2,7 @@ from flask import Flask, render_template, request
 import math
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from system.model import deepseekv2, llama70b
+from simulator.base.model import deepseekv2, llama70b
 
 
 app = Flask(__name__)

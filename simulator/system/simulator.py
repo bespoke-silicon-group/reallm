@@ -95,7 +95,7 @@ class Simulator:
             workload_name = self.trace.split("/")[-1].split(".")[0]
         else:
             workload_name = self.trace.split("/")[-1].split(".")[0] + "." + self.trace.split("/")[-1].split(".")[1]
-        hw_name = f"{self.hardware_sim.hardware.num_nodes}-{self.hardware_sim.hardware.node.name}-{self.hardware_sim.scheduler_algo}-{self.hardware_sim.hardware.parallelism}"
+        hw_name = f"{self.hardware_sim.hardware.num_nodes}-{self.hardware_sim.hardware.node.name}-{self.hardware_sim.scheduler_algo}-{self.scheduler.prefill_chunk}-{self.hardware_sim.hardware.parallelism}"
         # check if the directory exists
         if not os.path.exists(f"{self.result_dir}/{model_name}"):
             os.mkdir(f"{self.result_dir}/{model_name}")

@@ -127,28 +127,32 @@ def run_system_simulation(config, workspace_dir, model,
     if attn_parallelism != ffn_parallelism:
         raise ValueError("Attention and FFN parallelism must be the same.")
     
-    io_algo = config.get('io_algo', 'multishot')
-    scheduler_algo = config.get('batching_algo', 'mixed-sarathi')
-    prefill_chunk = config.get('prefill_chunk', 2048)
+    io_algo = system_config.get('io_algo', 'multishot')
+    scheduler_algo = system_config.get('batching_algo', 'mixed-sarathi')
+    prefill_chunks = system_config.get('prefill_chunk', 2048)
+    if isinstance(prefill_chunks, int):
+        prefill_chunks = [prefill_chunks]
 
     end_reqs = system_sim_config.get('end_reqs', 10)
 
     print(f"Running {sim_method} simulation on {num_nodes} {hw_node_name} devices...")
     print(f"system_config: {system_config}")
-    for trace_file in traces:
-        print(f"Simulating trace: {trace_file}...")
-        run_system_sim(model=model, 
-                       trace=trace_file,
-                       hw_node_name=hw_node_name,
-                       num_nodes=num_nodes,
-                       parallelism=attn_parallelism, 
-                       io_algo=io_algo,
-                       scheduler_algo=scheduler_algo, 
-                       prefill_chunk=prefill_chunk,
-                       sim_method=sim_method,
-                       end_reqs=end_reqs,
-                       workspace_dir=workspace_dir,
-        )
+    for prefill_chunk in prefill_chunks:
+        print(f"Prefill chunk: {prefill_chunk}")
+        for trace_file in traces:
+            print(f"Simulating trace: {trace_file}...")
+            run_system_sim(model=model, 
+                           trace=trace_file,
+                           hw_node_name=hw_node_name,
+                           num_nodes=num_nodes,
+                           parallelism=attn_parallelism, 
+                           io_algo=io_algo,
+                           scheduler_algo=scheduler_algo, 
+                           prefill_chunk=prefill_chunk,
+                           sim_method=sim_method,
+                           end_reqs=end_reqs,
+                           workspace_dir=workspace_dir,
+            )
                   
     print("System simulation completed.")
 
